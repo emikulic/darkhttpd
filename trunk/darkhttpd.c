@@ -336,7 +336,7 @@ static char *xstrdup(const char *src)
 
 
 
-#ifdef __sun__ /* unimpressed by Solaris */
+#ifdef __sun /* unimpressed by Solaris */
 static int vasprintf(char **strp, const char *fmt, va_list ap)
 {
     char tmp;
