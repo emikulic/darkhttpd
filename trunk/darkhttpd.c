@@ -9,7 +9,7 @@
 
 /*
  * TODO:
- *  . Ignore SIGPIPE.
+ *  x Ignore SIGPIPE.
  *  x Actually serve files.
  *  . Generate directory entries.
  *  x Log to file.
@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -766,6 +767,8 @@ static void httpd_poll(void)
     fd_set recv_set, send_set;
     int max_fd, select_ret;
     struct connection *conn;
+    struct timeval timeout = { IDLETIME, 0 };
+    int bother_with_timeout = 0;
 
     FD_ZERO(&recv_set);
     FD_ZERO(&send_set);
@@ -784,11 +787,13 @@ static void httpd_poll(void)
         {
         case RECV_REQUEST:
             MAX_FD_SET(conn->socket, &recv_set);
+            bother_with_timeout = 1;
             break;
 
         case SEND_HEADER:
         case SEND_REPLY:
             MAX_FD_SET(conn->socket, &send_set);
+            bother_with_timeout = 1;
             break;
 
         case DONE:
@@ -805,8 +810,15 @@ static void httpd_poll(void)
     #undef MAX_FD_SET
 
     debugf("select("), fflush(stdout);
-    select_ret = select(max_fd + 1, &recv_set, &send_set, NULL, NULL);
-    if (select_ret == 0) errx(1, "select() timed out");
+    select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
+        (bother_with_timeout) ? &timeout : NULL);
+    if (select_ret == 0)
+    {
+        if (!bother_with_timeout)
+            errx(1, "select() timed out");
+        else
+            return;
+    }
     if (select_ret == -1) err(1, "select()");
     debugf(")\n");
 
@@ -837,6 +849,16 @@ static void httpd_poll(void)
 
 
 
+/* ---------------------------------------------------------------------------
+ * Ignore SIGPIPE
+ */
+static void ignore_signal(int signum)
+{
+    if (signum == signum) { /* do nothing */ }
+}
+
+
+
 int main(int argc, char *argv[])
 {
     printf("%s, %s.\n", pkgname, copyright);
@@ -849,6 +871,8 @@ int main(int argc, char *argv[])
         logfile = fopen(logfile_name, "wb");
         if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
     }
+
+    signal(SIGPIPE, ignore_signal);
 
     for (;;) httpd_poll();
 
