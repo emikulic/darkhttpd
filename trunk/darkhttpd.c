@@ -347,13 +347,25 @@ static void default_reply(struct connection *conn,
 
 
 /* ---------------------------------------------------------------------------
- * Parse "GET / HTTP/1.1" to get the method (GET) and the url (/).
- * Remember to deallocate the method and url buffers.
+ * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET) and the
+ * url (/).  Remember to deallocate the method and url buffers.
  */
 static void parse_request(const char *req, const int length,
     char **method, char **url)
 {
-    /* FIXME */
+    int bound1, bound2;
+
+    for (bound1=0; bound1<length && req[bound1] != ' '; bound1++);
+
+    *method = (char*)xmalloc(bound1+1);
+    memcpy(*method, req, bound1);
+    (*method)[bound1] = '\0';
+
+    for (bound2=bound1+1; bound2<length && req[bound2] != ' '; bound2++);
+
+    *url = (char*)xmalloc(bound2-bound1);
+    memcpy(*url, req+bound1+1, bound2-bound1-1);
+    (*url)[bound2-bound1-1] = '\0';
 }
 
 
@@ -366,7 +378,7 @@ static void process_request(struct connection *conn)
     char *method, *url;
     parse_request(conn->request, conn->request_length, &method, &url);
 
-    /*debugf("method=``%s'', url=``%s''\n", method, url);*/
+    debugf("method=``%s'', url=``%s''\n", method, url);
     debugf("%s", conn->request);
 
     /* FIXME */
@@ -376,6 +388,9 @@ static void process_request(struct connection *conn)
     free(conn->request);
     conn->request = NULL;
     debugf("%s-=-\n", conn->header);
+
+    free(method);
+    free(url);
 }
 
 
