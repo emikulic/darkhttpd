@@ -32,7 +32,6 @@ static const char rcsid[]     =
 
 /*
  * Note: Solaris users: link with -lxnet
- * Note: FreeBSD users: -DNO_ACCEPTFILTER to turn off acceptfilter
  */
 
 #ifdef __linux
@@ -257,7 +256,7 @@ static int sockin = -1;             /* socket to accept connections from */
 static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
-static int want_chroot = 0;
+static int want_chroot = 0, want_accf = 0;
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -461,15 +460,20 @@ static void nonblock_socket(const int sock)
  */
 static void acceptfilter_socket(const int sock)
 {
-#if defined(__FreeBSD__) && !defined(NO_ACCEPTFILTER)
-    struct accept_filter_arg filt = {"httpready", ""};
-    if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
-        &filt, sizeof(filt)) == -1)
-        fprintf(stderr, "cannot enable acceptfilter: %s\n",
-            strerror(errno));
-    else
-        printf("enabled acceptfilter\n");
+    if (want_accf)
+    {
+#if defined(__FreeBSD__)
+        struct accept_filter_arg filt = {"httpready", ""};
+        if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
+            &filt, sizeof(filt)) == -1)
+            fprintf(stderr, "cannot enable acceptfilter: %s\n",
+                strerror(errno));
+        else
+            printf("enabled acceptfilter\n");
+#else
+        printf("this platform doesn't support acceptfilter\n");
 #endif
+    }
 }
 
 
@@ -924,6 +928,11 @@ static void usage(void)
     "\n"
     "\t--uid uid, --gid gid\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n"
+#ifdef __FreeBSD__
+    "\n"
+    "\t--accf\n"
+    "\t\tUse acceptfilter.\n"
+#endif
     "\n",
     bindport, index_name);
 }
@@ -1036,6 +1045,10 @@ static void parse_commandline(const int argc, char *argv[])
 
             if (g == NULL) errx(1, "no such gid: `%s'", argv[i]);
             drop_gid = g->gr_gid;
+        }
+        else if (strcmp(argv[i], "--accf") == 0)
+        {
+            want_accf = 1;
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -1545,8 +1558,8 @@ struct dlent
 
 static int dlent_cmp(const void *a, const void *b)
 {
-    return strcmp( (*(const struct dlent **)a)->name,
-                   (*(const struct dlent **)b)->name );
+    return strcmp( (*((const struct dlent * const *)a))->name,
+                   (*((const struct dlent * const *)b))->name );
 }
 
 static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output)
@@ -1588,7 +1601,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output)
         entries++;
     }
 
-    (void)closedir(dir); /* FIXME: not checking return -1 */
+    (void)closedir(dir); /* can't error out if opendir() succeeded */
 
     safefree(currname);
     qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
@@ -1826,6 +1839,7 @@ static void process_get(struct connection *conn)
             /* check for wrapping */
             if (from < 0 || from > to) from = 0;
         }
+        else errx(1, "internal error - from/to mismatch");
 
         conn->reply_start = from;
         conn->reply_length = to - from + 1;
