@@ -454,30 +454,6 @@ static void nonblock_socket(const int sock)
 
 
 /* ---------------------------------------------------------------------------
- * Enable acceptfilter on the specified socket.  (This is only available on
- * FreeBSD)
- */
-static void acceptfilter_socket(const int sock)
-{
-    if (want_accf)
-    {
-#if defined(__FreeBSD__)
-        struct accept_filter_arg filt = {"httpready", ""};
-        if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
-            &filt, sizeof(filt)) == -1)
-            fprintf(stderr, "cannot enable acceptfilter: %s\n",
-                strerror(errno));
-        else
-            printf("enabled acceptfilter\n");
-#else
-        printf("this platform doesn't support acceptfilter\n");
-#endif
-    }
-}
-
-
-
-/* ---------------------------------------------------------------------------
  * Split string out of src with range [left:right-1]
  */
 static char *split_string(const char *src,
@@ -891,7 +867,21 @@ static void init_sockin(void)
     if (listen(sockin, max_connections) == -1)
         err(1, "listen()");
 
-    acceptfilter_socket(sockin);
+    /* enable acceptfilter (this is only available on FreeBSD) */
+    if (want_accf)
+    {
+#if defined(__FreeBSD__)
+        struct accept_filter_arg filt = {"httpready", ""};
+        if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
+            &filt, sizeof(filt)) == -1)
+            fprintf(stderr, "cannot enable acceptfilter: %s\n",
+                strerror(errno));
+        else
+            printf("enabled acceptfilter\n");
+#else
+        printf("this platform doesn't support acceptfilter\n");
+#endif
+    }
 }
 
 
@@ -2142,7 +2132,8 @@ static void log_connection(const struct connection *conn)
     inaddr.s_addr = conn->client;
 
     fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\t\"%s\"\t\"%s\"\n",
-        time(NULL), inet_ntoa(inaddr), conn->method, conn->uri,
+        (unsigned long int)time(NULL), inet_ntoa(inaddr),
+        conn->method, conn->uri,
         conn->http_code, conn->total_sent,
         (conn->referer == NULL)?"":conn->referer,
         (conn->user_agent == NULL)?"":conn->user_agent
