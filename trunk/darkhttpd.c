@@ -223,6 +223,8 @@ static void parse_mimetype_line(const char *line)
         assert(strlen(mapping->mimetype) > 0);
         assert(strlen(mapping->extension) > 0);
 
+        debugf("*.%s \t-> %s\n", mapping->extension, mapping->mimetype);
+
         LIST_INSERT_HEAD(&mime_map, mapping, entries);
 
         if (line[rbound] == 0) return; /* end of line */
@@ -240,7 +242,56 @@ static void parse_default_extension_map(void)
     int i;
 
     for (i=0; default_extension_map[i] != NULL; i++)
-    parse_mimetype_line(default_extension_map[i]);
+        parse_mimetype_line(default_extension_map[i]);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Adds contents of specified file to mime_map list.
+ */
+static void parse_extension_map_file(const char *filename)
+{
+    char *buf = NULL;
+    FILE *fp = fopen(filename, "rb");
+    if (fp == NULL) err(1, "fopen(\"%s\")", filename);
+
+    while (!feof(fp))
+    {
+        size_t line_len;
+        char c;
+        long filepos;
+
+        /* store current file position */
+        filepos = ftell(fp);
+        if (filepos == -1) err(1, "ftell()");
+
+        /* read to newline */
+        for (c=0, line_len=0;
+            !feof(fp) && c != '\n' && c != '\r';
+            c = fgetc(fp), line_len++);
+
+        /* jump back to beginning of current line */
+        if (fseek(fp, filepos, SEEK_SET) == -1)
+            err(1, "fseek()");
+
+        if (line_len-1 != 0)
+        {
+            /* alloc and fill up buf */
+            buf = (char*) xmalloc(line_len);
+            if (fread(buf, 1, line_len-1, fp) != (line_len-1))
+                err(1, "fread()");
+            buf[line_len-1] = '\0';
+
+            /* parse it */
+            parse_mimetype_line(buf);
+            free(buf);
+        }
+
+        c = fgetc(fp); /* read last char (newline) */
+    }
+
+    fclose(fp);
 }
 
 
@@ -307,6 +358,9 @@ static void usage(void)
     "\n"
     "\t--index filename (default: %s)\n" /* index_name */
     "\t\tDefault file to serve when a directory is requested.\n"
+    "\n"
+    "\t--mimetypes filename (optional)\n"
+    "\t\tParses specified file for extension-MIME associations.\n"
     "\n"
     /* "\t--uid blah, --gid blah\n" FIXME */
     , bindport, index_name);
@@ -406,6 +460,11 @@ static void parse_commandline(const int argc, char *argv[])
         {
             if (++i >= argc) errx(1, "missing filename after --index");
             index_name = argv[i];
+        }
+        else if (strcmp(argv[i], "--mimetypes") == 0)
+        {
+            if (++i >= argc) errx(1, "missing filename after --mimetypes");
+            parse_extension_map_file(argv[i]);
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
