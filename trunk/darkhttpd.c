@@ -982,30 +982,24 @@ static void parse_commandline(const int argc, char *argv[])
             struct passwd *p;
             int num;
             if (++i >= argc) errx(1, "missing uid after --uid");
-            if (!str_to_num(argv[i], &num))
-                p = getpwnam(argv[i]);
-            else
+            p = getpwnam(argv[i]);
+            if ((p == NULL) && (str_to_num(argv[i], &num)))
                 p = getpwuid( (uid_t)num );
 
-            if (p == NULL)
-                errx(1, "no such uid: `%s'", argv[i]);
-            else
-                drop_uid = p->pw_uid;
+            if (p == NULL) errx(1, "no such uid: `%s'", argv[i]);
+            drop_uid = p->pw_uid;
         }
         else if (strcmp(argv[i], "--gid") == 0)
         {
             struct group *g;
             int num;
             if (++i >= argc) errx(1, "missing gid after --gid");
-            if (!str_to_num(argv[i], &num))
-                g = getgrnam(argv[i]);
-            else
+            g = getgrnam(argv[i]);
+            if ((g == NULL) && (str_to_num(argv[i], &num)))
                 g = getgrgid( (gid_t)num );
 
-            if (g == NULL)
-                errx(1, "no such gid: `%s'", argv[i]);
-            else
-                drop_gid = g->gr_gid;
+            if (g == NULL) errx(1, "no such gid: `%s'", argv[i]);
+            drop_gid = g->gr_gid;
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
