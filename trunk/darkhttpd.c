@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -71,6 +72,7 @@ struct connection
     char *request;
     unsigned int request_length;
 
+    /* request fields */
     char *method, *uri, *referer, *user_agent;
 
     char *header;
@@ -207,6 +209,17 @@ static unsigned int xasprintf(char **ret, const char *format, ...)
     len = xvasprintf(ret, format, va);
     va_end(va);
     return len;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Make the specified socket non-blocking.
+ */
+static void nonblock_socket(const int sock)
+{
+    if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1)
+        err(1, "fcntl() to set O_NONBLOCK");
 }
 
 
@@ -468,6 +481,8 @@ static void init_sockin(void)
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
 
+    nonblock_socket(sockin);
+
     /* bind socket */
     addrin.sin_family = (u_char)PF_INET;
     addrin.sin_port = htons(bindport);
@@ -677,6 +692,8 @@ static void accept_connection(void)
             &sin_size);
     if (conn->socket == -1) err(1, "accept()");
 
+    nonblock_socket(conn->socket);
+
     conn->state = RECV_REQUEST;
     conn->client = addrin.sin_addr.s_addr;
     LIST_INSERT_HEAD(&connlist, conn, entries);
@@ -819,7 +836,7 @@ static void default_reply(struct connection *conn,
      "HTTP/1.1 %d %s\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
-     "Connection: close\r\n"
+     "Connection: close\r\n" /* FIXME: remove for keepalive */
      "Content-Length: %d\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
@@ -851,7 +868,8 @@ static char *parse_field(const struct connection *conn, const char *field)
     /* find end */
     for (bound2 = bound1;
         conn->request[bound2] != '\r' &&
-        bound2 < conn->request_length; bound2++);
+        bound2 < conn->request_length; bound2++)
+            ;
 
     /* copy to buffer */
     return split_string(conn->request, bound1, bound2);
@@ -898,6 +916,9 @@ static void process_get(struct connection *conn)
     char *decoded_url, *safe_url, *target, *if_mod_since;
     const char *mimetype = NULL;
     struct stat filestat;
+
+    /* FIXME */
+    printf("-----\n%s-----\n\n", conn->request);
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->uri);
@@ -957,7 +978,7 @@ static void process_get(struct connection *conn)
     conn->reply_length = filestat.st_size;
     conn->lastmod = xstrdup(rfc1123_date(filestat.st_mtime));
 
-    /* the browser might already have it */
+    /* check for If-Modified-Since, may not have to send */
     if_mod_since = parse_field(conn, "If-Modified-Since: ");
     if (if_mod_since != NULL &&
         strcmp(if_mod_since, conn->lastmod) == 0)
@@ -972,7 +993,7 @@ static void process_get(struct connection *conn)
         "HTTP/1.1 200 OK\r\n"
         "Date: %s\r\n"
         "Server: %s\r\n"
-        "Connection: close\r\n"
+        "Connection: close\r\n" /* FIXME: remove this for keepalive */
         "Content-Length: %d\r\n"
         "Content-Type: %s\r\n"
         "Last-Modified: %s\r\n"
@@ -1084,9 +1105,11 @@ static void poll_send_header(struct connection *conn)
         conn->header_length - conn->header_sent, 0);
     conn->last_active = time(NULL);
     debugf("poll_send_header(%d) sent %d bytes\n", conn->socket, sent);
-    if (sent == -1) err(1, "send()");
-    if (sent == 0)
+
+    /* handle any errors (-1) or closure (0) in send() */
+    if (sent < 1)
     {
+        if (sent == -1) debugf("send() error: %s\n", strerror(errno));
         conn->state = DONE;
         return;
     }
@@ -1144,10 +1167,10 @@ static void poll_send_reply(struct connection *conn)
     debugf("poll_send_reply(%d) sent %d bytes [%d to %d]\n",
         conn->socket, sent, conn->reply_sent, conn->reply_sent+sent-1);
 
-    /* handle any errors in send() */
-    if (sent == -1) err(1, "send()");
-    if (sent == 0)
+    /* handle any errors (-1) or closure (0) in send() */
+    if (sent < 1)
     {
+        if (sent == -1) debugf("send() error: %s\n", strerror(errno));
         conn->state = DONE;
         return;
     }
@@ -1285,16 +1308,6 @@ static void httpd_poll(void)
 
 
 /* ---------------------------------------------------------------------------
- * Ignore SIGPIPE
- */
-static void ignore_signal(int signum)
-{
-    if (signum == signum) { /* do nothing */ }
-}
-
-
-
-/* ---------------------------------------------------------------------------
  * Execution starts here.
  */
 int main(int argc, char *argv[])
@@ -1311,8 +1324,8 @@ int main(int argc, char *argv[])
         if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
     }
 
-    if (signal(SIGPIPE, ignore_signal) == SIG_ERR)
-        err(1, "signal(SIG_PIPE)");
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+        err(1, "signal(ignore SIGPIPE)");
 
     for (;;) httpd_poll();
 
