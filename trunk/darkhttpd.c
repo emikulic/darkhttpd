@@ -2052,16 +2052,21 @@ static ssize_t send_from_file(const int s, const int fd,
 
     if (lseek(fd, ofs, SEEK_SET) == -1) err(1, "fseek(%d)", (int)ofs);
     numread = read(fd, buf, amount);
-    if (numread != amount)
+    if (numread == 0)
     {
-        if (numread == 0)
-            fprintf(stderr, "premature eof on fd %d\n", fd);
-        else if (numread != -1)
-            fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
-                numread, amount, fd);
+        fprintf(stderr, "premature eof on fd %d\n", fd);
         return -1;
     }
-    return send(s, buf, amount, 0);
+    else if (numread != -1)
+    {
+        fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
+            numread, amount, fd);
+        return -1;
+    }
+    else if ((size_t)numread != amount)
+        return -1;
+    else
+        return send(s, buf, amount, 0);
 #endif
 #endif
 }
