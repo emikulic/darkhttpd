@@ -24,6 +24,10 @@
  *  x Ensure URIs requested are safe.
  */
 
+#ifdef __linux
+#define _GNU_SOURCE /* for strsignal() and vasprintf() */
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -119,7 +123,7 @@ struct mime_mapping
 
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
-static u_int16_t bindport = 80;
+static uint16_t bindport = 80;
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 
@@ -272,7 +276,9 @@ static char *make_safe_uri(const char *uri)
         for (; uri[i] == '/'; i++);
 
         /* look for the next slash */
-        for (j=i+1; uri[j] != '/' && uri[j] != '\0'; j++);
+        for (j=i+1; j < urilen && uri[j] != '/'; j++);
+
+        /* FIXME: test this whole function */
 
         elements[elem++] = split_string(uri, i, j);
         i = j; /* iterate */
@@ -322,6 +328,10 @@ static char *make_safe_uri(const char *uri)
 
     out = (char*) xrealloc(out, strlen(out)+1); /* shorten buffer */
     debugf("`%s' -safe-> `%s'\n", uri, out);
+    for (j=0; j<elem; j++)
+        if (elements[j] != NULL) free(elements[j]);
+    free(elements);
+    free(reassembly);
     return out;
 }
 
@@ -1072,8 +1082,10 @@ static void process_get(struct connection *conn)
         debugf("not modified since %s\n", if_mod_since);
         default_reply(conn, 304, "Not Modified", "");
         conn->header_only = 1;
+        free(if_mod_since);
         return;
     }
+    free(if_mod_since);
 
     if (conn->range_begin_given || conn->range_end_given)
     {
@@ -1342,7 +1354,11 @@ static void poll_send_reply(struct connection *conn)
             free(conn->reply);
             conn->reply = NULL;
         }
-        if (conn->reply_file != NULL) fclose(conn->reply_file);
+        if (conn->reply_file != NULL)
+        {
+            fclose(conn->reply_file);
+            conn->reply_file = NULL;
+        }
         conn->state = DONE;
     }
 }
@@ -1356,8 +1372,8 @@ static void log_connection(const struct connection *conn)
 {
     struct in_addr inaddr;
 
-    assert(conn->http_code != 0);
     if (logfile == NULL) return;
+    if (conn->http_code == 0) return; /* invalid - died in request */
 
     /* Separated by tabs:
      * time client_ip method uri http_code bytes_sent "referer" "user-agent"
@@ -1385,21 +1401,27 @@ static void httpd_poll(void)
     fd_set recv_set, send_set;
     int max_fd, select_ret;
     struct connection *conn;
-    struct timeval timeout = { IDLETIME, 0 };
     int bother_with_timeout = 0;
+    struct timeval timeout;
+
+    timeout.tv_sec = IDLETIME;
+    timeout.tv_usec = 0;
 
     FD_ZERO(&recv_set);
     FD_ZERO(&send_set);
     max_fd = 0;
 
     /* set recv/send fd_sets */
-    #define MAX_FD_SET(sock, fdset) FD_SET(sock,fdset), \
-                                    max_fd = (max_fd<sock) ? sock : max_fd
+    #define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
+                                    max_fd = (max_fd<sock) ? sock : max_fd; }
 
     MAX_FD_SET(sockin, &recv_set);
 
-    LIST_FOREACH(conn, &connlist, entries)
+    conn = LIST_FIRST(&connlist);
+    while (conn != NULL)
     {
+        struct connection *next = LIST_NEXT(conn, entries);
+
         poll_check_timeout(conn);
         switch (conn->state)
         {
@@ -1424,6 +1446,8 @@ static void httpd_poll(void)
 
         default: errx(1, "invalid state");
         }
+
+        conn = next;
     }
     #undef MAX_FD_SET
 
@@ -1465,9 +1489,7 @@ static void httpd_poll(void)
 
 
 /* ---------------------------------------------------------------------------
- * SIG{INT,QUIT} handler - clean up quickly and exit by re-sending the signal
- *
- * http://www.cons.org/cracauer/sigint.html
+ * Close all sockets and FILEs and exit.
  */
 static void exit_quickly(int sig)
 {
@@ -1477,17 +1499,22 @@ static void exit_quickly(int sig)
     LIST_FOREACH(conn, &connlist, entries)
     {
         LIST_REMOVE(conn, entries);
+        log_connection(conn);
         free_connection(conn);
-        free(conn);
     }
     close(sockin);
+    if (logfile != NULL) fclose(logfile);
     printf("done!\n");
+ 
+    /* According to: http://www.cons.org/cracauer/sigint.html
+     * SIGINT and SIGQUIT should be sent to the default handler to ensure the
+     * correct exit codes are used:
 
-    /* Send back to the default handler - this ensures the correct exit
-     * value will be used.
-     */
     if (signal(sig, SIG_DFL) == SIG_ERR) err(1, "signal(SIG_DFL)");
     if (raise(sig) == -1) err(1, "raise()");
+    
+     */
+    exit(EXIT_SUCCESS);
 }
 
 
