@@ -74,6 +74,8 @@ struct connection
 
     /* request fields */
     char *method, *uri, *referer, *user_agent;
+    size_t range_begin, range_end;
+    int range_begin_given, range_end_given;
 
     char *header;
     size_t header_length, header_sent;
@@ -231,7 +233,10 @@ static void nonblock_socket(const int sock)
 static char *split_string(const char *src,
     const size_t left, const size_t right)
 {
-    char *dest = (char*) xmalloc(right - left + 1);
+    char *dest;
+    assert(left <= right);
+
+    dest = (char*) xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
     dest[right-left] = '\0';
     return dest;
@@ -883,6 +888,68 @@ static char *parse_field(const struct connection *conn, const char *field)
 
     /* copy to buffer */
     return split_string(conn->request, bound1, bound2);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Parse a Range: field into range_begin and range_end.  Only handles the
+ * first range if a list is given.  Sets range_{begin,end}_given to 1 if
+ * either part of the range is given.
+ */
+static void parse_range_field(struct connection *conn)
+{
+    int bound1, bound2, len;
+    char *range;
+
+    do /* break handling */
+    {
+        range = parse_field(conn, "Range: bytes=");
+        if (range == NULL) return;
+        len = strlen(range);
+
+        /* parse number up to hyphen */
+        bound1 = 0;
+        for (bound2=0;
+            isdigit( (int)range[bound2] ) && bound2 < len;
+            bound2++)
+                ;
+
+        if (bound2 == len || range[bound2] != '-')
+            break; /* there must be a hyphen here */
+
+        if (bound1 != bound2)
+        {
+            conn->range_begin_given = 1;
+            conn->range_begin = atoi(range+bound1);
+        }
+
+        /* parse number after hyphen */
+        bound2++;
+        for (bound1=bound2;
+            isdigit( (int)range[bound2] ) && bound2 < len;
+            bound2++)
+                ; /* FIXME */
+
+        if (bound2 != len && range[bound2] != ',')
+            break; /* must be end of string or a list to be valid */
+
+        if (bound1 != bound2)
+        {
+            conn->range_end_given = 1;
+            conn->range_end = atoi(range+bound1);
+        }
+    }
+    while(0); /* break handling */
+
+    free(range);
+
+    /* sanity check: begin <= end */
+    if (conn->range_begin_given && conn->range_end_given &&
+        (conn->range_begin > conn->range_end))
+    {
+        conn->range_begin_given = conn->range_end_given = 0;
+    }
 }
 
 
