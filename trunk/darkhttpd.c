@@ -1049,6 +1049,7 @@ static void poll_check_timeout(struct connection *conn)
         if (time(NULL) - conn->last_active >= idletime)
         {
             debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
+            conn->conn_close = 1;
             conn->state = DONE;
         }
     }
@@ -1532,10 +1533,10 @@ static void poll_recv_request(struct connection *conn)
 
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
     debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, (int)recvd);
-    if (recvd == -1) err(1, "recv()");
-    if (recvd == 0)
+    if (recvd <= 0)
     {
-        /* socket closed on us */
+        if (recvd == -1) debugf("recv() error: %s\n", strerror(errno));
+        conn->conn_close = 1;
         conn->state = DONE;
         return;
     }
@@ -1582,6 +1583,7 @@ static void poll_send_header(struct connection *conn)
     if (sent < 1)
     {
         if (sent == -1) debugf("send() error: %s\n", strerror(errno));
+        conn->conn_close = 1;
         conn->state = DONE;
         return;
     }
@@ -1634,6 +1636,7 @@ static void poll_send_reply(struct connection *conn)
         {
             if (feof(conn->reply_file))
             {
+                conn->conn_close = 1;
                 conn->state = DONE;
                 fprintf(stderr, "(%d) premature end of file\n",
                     conn->socket);
@@ -1657,6 +1660,7 @@ static void poll_send_reply(struct connection *conn)
     if (sent < 1)
     {
         if (sent == -1) debugf("send() error: %s\n", strerror(errno));
+        conn->conn_close = 1;
         conn->state = DONE;
         return;
     }
