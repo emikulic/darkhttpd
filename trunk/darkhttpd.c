@@ -188,9 +188,6 @@ static FILE *logfile = NULL;
 static int want_chroot = 0;
 
 static const char *default_extension_map[] = {
-    /* Linear search used - order affects speed significantly.
-     * This could be done in a better way.
-     */
     "text/html          html htm",
     "image/png          png",
     "image/jpeg         jpeg jpe jpg",
@@ -701,7 +698,8 @@ static char *expand_tilde(const char *path)
 
 
 /* ---------------------------------------------------------------------------
- * Strips the ending slash from a string (if there is one)
+ * Strips the ending slash from a string (if there is one) and re-allocates
+ * the string.
  */
 static void strip_endslash(char **str)
 {
@@ -1617,7 +1615,7 @@ static void exit_quickly(int sig)
     int i;
 
     printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
-    /* close connections */
+    /* close and free connections */
     conn = LIST_FIRST(&connlist);
     while (conn != NULL)
     {
