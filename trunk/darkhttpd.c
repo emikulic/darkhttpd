@@ -2171,8 +2171,21 @@ static void httpd_poll(void)
         poll_check_timeout(conn);
         switch (conn->state)
         {
+        case DONE:
+            /* clean out stale connections while we're at it */
+            if (conn->conn_close)
+            {
+                LIST_REMOVE(conn, entries);
+                free_connection(conn);
+                safefree(conn);
+                break;
+            }
+            /* else */
+            recycle_connection(conn);
+            /* And enqueue as RECV_REQUEST. */
+            /* FALLTHROUGH */
+
         case RECV_REQUEST:
-        recv_request:
             MAX_FD_SET(conn->socket, &recv_set);
             bother_with_timeout = 1;
             break;
@@ -2181,22 +2194,6 @@ static void httpd_poll(void)
         case SEND_REPLY:
             MAX_FD_SET(conn->socket, &send_set);
             bother_with_timeout = 1;
-            break;
-
-        case DONE:
-            /* clean out stale connections while we're at it */
-            if (conn->conn_close)
-            {
-                LIST_REMOVE(conn, entries);
-                free_connection(conn);
-                safefree(conn);
-            }
-            else
-            {
-                recycle_connection(conn);
-                /* And enqueue as RECV_REQUEST. */
-                goto recv_request;
-            }
             break;
 
         default: errx(1, "invalid state");
