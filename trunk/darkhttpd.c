@@ -235,9 +235,9 @@ static void *xrealloc(void *original, const size_t size)
  */
 static char *xstrdup(const char *src)
 {
-    size_t len = strlen(src);
-    char *dest = (char*) xmalloc(len + 1);
-    memcpy(dest, src, len+1);
+    size_t len = strlen(src) + 1;
+    char *dest = xmalloc(len);
+    memcpy(dest, src, len);
     return dest;
 }
 
@@ -276,6 +276,7 @@ static unsigned int xasprintf(char **ret, const char *format, ...)
  */
 static void nonblock_socket(const int sock)
 {
+    assert(sock != -1);
     if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1)
         err(1, "fcntl() to set O_NONBLOCK");
 }
@@ -291,7 +292,7 @@ static char *split_string(const char *src,
     char *dest;
     assert(left <= right);
 
-    dest = (char*) xmalloc(right - left + 1);
+    dest = xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
     dest[right-left] = '\0';
     return dest;
@@ -308,6 +309,8 @@ static char *make_safe_uri(const char *uri)
     char **elements, **reassembly, *out;
     unsigned int slashes, elem, reasm, urilen, i, j;
 
+    assert(uri != NULL);
+
     if (uri[0] != '/') return NULL;
     urilen = (unsigned int)strlen(uri);
 
@@ -316,7 +319,7 @@ static char *make_safe_uri(const char *uri)
         if (uri[i] == '/') slashes++;
 
     /* make an array for the URI elements */
-    elements = (char**) xmalloc(sizeof(char*) * slashes);
+    elements = xmalloc(sizeof(char*) * slashes);
     for (i=0; i<slashes; i++) elements[i] = NULL;
 
     /* split by slash */
@@ -335,7 +338,7 @@ static char *make_safe_uri(const char *uri)
         i = j; /* iterate */
     }
 
-    reassembly = (char**) xmalloc(sizeof(char*) * slashes);
+    reassembly = xmalloc(sizeof(char*) * slashes);
     for (i=0; i<slashes; i++) reassembly[i] = NULL;
     reasm = 0;
 
@@ -368,7 +371,7 @@ static char *make_safe_uri(const char *uri)
     }
 
     /* reassemble */
-    out = (char*) xmalloc(urilen+1);
+    out = xmalloc(urilen+1);
     out[0] = '\0';
     
     for (i=0; i<reasm; i++)
@@ -377,7 +380,7 @@ static char *make_safe_uri(const char *uri)
         strcat(out, reassembly[i]);
     }
 
-    out = (char*) xrealloc(out, strlen(out)+1); /* shorten buffer */
+    out = xrealloc(out, strlen(out)+1); /* shorten buffer */
     debugf("`%s' -safe-> `%s'\n", uri, out);
     for (j=0; j<elem; j++)
         if (elements[j] != NULL) free(elements[j]);
@@ -415,8 +418,8 @@ static void add_mime_mapping(const char *extension, const char *mimetype)
 
     /* no replacement - add a new entry */
     mime_map_size++;
-    mime_map = (struct mime_mapping *)
-        xrealloc(mime_map, sizeof(struct mime_mapping) * mime_map_size);
+    mime_map = xrealloc(mime_map,
+        sizeof(struct mime_mapping) * mime_map_size);
     mime_map[mime_map_size-1].extension = xstrdup(extension);
     mime_map[mime_map_size-1].mimetype = xstrdup(mimetype);
 }
@@ -537,7 +540,7 @@ static void parse_extension_map_file(const char *filename)
         if (line_len-1 != 0)
         {
             /* alloc and fill up buf */
-            buf = (char*) xmalloc(line_len);
+            buf = xmalloc(line_len);
             if (fread(buf, 1, line_len-1, fp) != (line_len-1))
                 err(1, "fread()");
             buf[line_len-1] = '\0';
@@ -572,8 +575,9 @@ static const char *uri_content_type(const char *uri)
     size_t period, urilen = strlen(uri);
 
     for (period=urilen-1;
-        period > 0 && uri[period] != '.' &&
-        (urilen-period-1) <= longest_ext;
+        period > 0 &&
+            uri[period] != '.' &&
+            (urilen-period-1) <= longest_ext;
         period--)
             ;
 
@@ -707,7 +711,7 @@ static void strip_endslash(char **str)
     if ((*str)[strlen(*str)-1] != '/') return;
 
     (*str)[strlen(*str)-1] = 0;
-    *str = (char*) xrealloc(*str, strlen(*str)+1);
+    *str = xrealloc(*str, strlen(*str)+1);
 }
 
 
@@ -779,8 +783,7 @@ static void parse_commandline(const int argc, char *argv[])
  */
 static struct connection *new_connection(void)
 {
-    struct connection *conn = (struct connection *)
-        xmalloc(sizeof(struct connection));
+    struct connection *conn = xmalloc(sizeof(struct connection));
 
     conn->socket = -1;
     conn->client = INADDR_ANY;
@@ -886,13 +889,14 @@ static void strntoupper(char *str, const size_t length)
  */
 static void poll_check_timeout(struct connection *conn)
 {
-#if IDLETIME > 0
-    if (time(NULL) - conn->last_active >= IDLETIME)
+    if (IDLETIME > 0) /* optimised away by compiler */
     {
-        debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
-        conn->state = DONE;
+        if (time(NULL) - conn->last_active >= IDLETIME)
+        {
+            debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
+            conn->state = DONE;
+        }
     }
-#endif
 }
 
 
@@ -920,7 +924,7 @@ static char *rfc1123_date(char *dest, const time_t when)
 static char *urldecode(const char *url)
 {
     size_t i, len = strlen(url);
-    char *out = (char*)xmalloc(len+1);
+    char *out = xmalloc(len+1);
     int pos;
 
     for (i=0, pos=0; i<len; i++)
@@ -1252,7 +1256,8 @@ static void process_get(struct connection *conn)
             from, to, filestat.st_size, mimetype, lastmod
         );
         conn->http_code = 206;
-        debugf("sending %d-%d/%d\n", from, to, (int)filestat.st_size);
+        debugf("sending %u-%u/%u\n", (unsigned int)from, (unsigned int)to, 
+            (unsigned int)filestat.st_size);
     }
     else /* no range stuff */
     {
@@ -1449,10 +1454,10 @@ static void poll_send_reply(struct connection *conn)
     }
     conn->last_active = time(NULL);
     debugf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
-        conn->socket, (int)sent, conn->reply_start,
+        conn->socket, (int)sent, (int)conn->reply_start,
         (int)conn->reply_sent,
         (int)(conn->reply_sent + sent - 1),
-        conn->reply_length);
+        (int)conn->reply_length);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
@@ -1612,7 +1617,7 @@ static void httpd_poll(void)
 static void exit_quickly(int sig)
 {
     struct connection *conn;
-    int i;
+    size_t i;
 
     printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
     /* close and free connections */
@@ -1642,7 +1647,7 @@ static void exit_quickly(int sig)
  
     /* According to: http://www.cons.org/cracauer/sigint.html
      * SIGINT and SIGQUIT should be sent to the default handler to ensure the
-     * correct exit codes are used:
+     * correct exit codes are used: (FIXME - not appropriate for httpd?)
 
     if (signal(sig, SIG_DFL) == SIG_ERR) err(1, "signal(SIG_DFL)");
     if (raise(sig) == -1) err(1, "raise()");
@@ -1684,7 +1689,7 @@ int main(int argc, char *argv[])
 
     for (;;) httpd_poll();
 
-    return 0; /* unreachable */
+    return EXIT_FAILURE; /* unreachable */
 }
 
 /* vim:set tabstop=4 shiftwidth=4 expandtab tw=78: */
