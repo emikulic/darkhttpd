@@ -14,7 +14,7 @@
  *  . Generate directory listings.
  *  x Log to file.
  *  . Partial content.
- *  . If-Modified-Since.
+ *  x If-Modified-Since.
  *  . Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
@@ -77,7 +77,7 @@ struct connection
     int header_dont_free, header_only, http_code;
 
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
-    char *reply;
+    char *reply, *lastmod; /* reply lastmod, not request if-mod-since */
     int reply_dont_free;
     FILE *reply_file;
     unsigned int reply_sent, reply_length;
@@ -164,6 +164,18 @@ static void *xrealloc(void *original, const size_t size)
     void *ptr = realloc(original, size);
     if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
     return ptr;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * strdup() that errx()s if it can't allocate.
+ */
+static char *xstrdup(const char *src)
+{
+    char *dest = strdup(src);
+    if (dest == NULL) errx(1, "out of memory in strdup()");
+    return dest;
 }
 
 
@@ -490,7 +502,7 @@ static char *expand_tilde(const char *path)
     const char *home;
     char *tmp = NULL;
 
-    if (path[0] != '~') return strdup(path); /* do nothing */
+    if (path[0] != '~') return xstrdup(path); /* do nothing */
 
     home = getenv("HOME");
     if (home == NULL)
@@ -604,7 +616,7 @@ static struct connection *new_connection(void)
     conn->header_sent = conn->header_length = 0;
     conn->header_dont_free = conn->header_only = 0;
     conn->http_code = 0;
-    conn->reply = NULL;
+    conn->reply = conn->lastmod = NULL;
     conn->reply_dont_free = 0;
     conn->reply_file = NULL;
     conn->reply_sent = conn->reply_length = 0;
@@ -661,6 +673,7 @@ static void free_connection(struct connection *conn)
     if (conn->user_agent != NULL) free(conn->user_agent);
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
+    if (conn->lastmod != NULL) free(conn->lastmod);
     if (conn->reply_file != NULL) fclose(conn->reply_file);
 }
 
@@ -851,7 +864,7 @@ static void parse_request(struct connection *conn)
  */
 static void process_get(struct connection *conn)
 {
-    char *decoded_url, *safe_url, *target, *tmp;
+    char *decoded_url, *safe_url, *target, *if_mod_since;
     const char *mimetype = NULL;
     struct stat filestat;
 
@@ -882,8 +895,9 @@ static void process_get(struct connection *conn)
     free(safe_url);
     safe_url = NULL;
 
+    debugf("uri=%s, target=%s, content-type=%s\n",
+        conn->uri, target, mimetype);
     conn->reply_file = fopen(target, "rb");
-    debugf("target = %s\n", target);
     free(target);
     target = NULL;
 
@@ -912,30 +926,32 @@ static void process_get(struct connection *conn)
 
     conn->reply_type = REPLY_FROMFILE;
     conn->reply_length = filestat.st_size;
+    conn->lastmod = xstrdup(rfc1123_date(filestat.st_mtime));
 
-    asprintf(&tmp,
+    /* the browser might already have it */
+    if_mod_since = parse_field(conn, "If-Modified-Since: ");
+    if (if_mod_since != NULL &&
+        strcmp(if_mod_since, conn->lastmod) == 0)
+    {
+        debugf("not modified since %s\n", if_mod_since);
+        default_reply(conn, 304, "Not Modified", "");
+        conn->header_only = 1;
+        return;
+    }
+
+    conn->header_length = asprintf(&(conn->header),
         "HTTP/1.1 200 OK\r\n"
         "Date: %s\r\n"
         "Server: %s\r\n"
         "Connection: close\r\n"
         "Content-Length: %d\r\n"
         "Content-Type: %s\r\n"
-        ,
-        rfc1123_date(time(NULL)), pkgname, conn->reply_length,
-        mimetype
-    );
-    if (tmp == NULL) errx(1, "out of memory in asprintf()");
-
-    debugf("uri=%s, content-type=%s\n", conn->uri, mimetype);
-
-    conn->header_length = asprintf(&(conn->header),
-        "%s"
         "Last-Modified: %s\r\n"
         "\r\n"
         ,
-        tmp, rfc1123_date(filestat.st_mtime)
+        rfc1123_date(time(NULL)), pkgname, conn->reply_length,
+        mimetype, conn->lastmod
     );
-    free(tmp);
     if (conn->header == NULL) errx(1, "out of memory in asprintf()");
     conn->http_code = 200;
 }
