@@ -15,7 +15,7 @@
  *  x Log to file.
  *  . Partial content.
  *  x If-Modified-Since.
- *  . Test If-Mod-Since with IE, Phoenix, lynx, links
+ *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
  *  . Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
@@ -83,7 +83,7 @@ struct connection
     FILE *reply_file;
     unsigned int reply_sent, reply_length;
 
-    unsigned int total_sent;
+    unsigned int total_sent; /* header + body = total, for logging */
 };
 
 
@@ -101,7 +101,8 @@ struct mime_mapping
 
 
 /* If a connection is idle for IDLETIME seconds or more, it gets closed and
- * removed from the connlist.
+ * removed from the connlist.  Define to 0 to remove the timeout
+ * functionality.
  */
 #define IDLETIME 60
 
@@ -724,8 +725,13 @@ static void strntoupper(char *str, const size_t length)
  */
 static void poll_check_timeout(struct connection *conn)
 {
+#if IDLETIME > 0
     if (time(NULL) - conn->last_active >= IDLETIME)
+    {
+        debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
         conn->state = DONE;
+    }
+#endif
 }
 
 
@@ -1032,6 +1038,7 @@ static void poll_recv_request(struct connection *conn)
     ssize_t recvd;
 
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
+    debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, recvd);
     if (recvd == -1) err(1, "recv()");
     if (recvd == 0)
     {
@@ -1075,6 +1082,8 @@ static void poll_send_header(struct connection *conn)
 
     sent = send(conn->socket, conn->header + conn->header_sent,
         conn->header_length - conn->header_sent, 0);
+    conn->last_active = time(NULL);
+    debugf("poll_send_header(%d) sent %d bytes\n", conn->socket, sent);
     if (sent == -1) err(1, "send()");
     if (sent == 0)
     {
@@ -1131,6 +1140,9 @@ static void poll_send_reply(struct connection *conn)
 
         sent = send(conn->socket, buf, amount, 0);
     }
+    conn->last_active = time(NULL);
+    debugf("poll_send_reply(%d) sent %d bytes [%d to %d]\n",
+        conn->socket, sent, conn->reply_sent, conn->reply_sent+sent-1);
 
     /* handle any errors in send() */
     if (sent == -1) err(1, "send()");
