@@ -7,6 +7,15 @@
  * $Id$
  */
 
+/*
+ * TODO:
+ *  . Actually serve files.
+ *  . Generate directory entries.
+ *  . Log to file.
+ *  . Partial content.
+ *  . Keep-alive connections.
+ */
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/queue.h>
@@ -329,7 +338,7 @@ static char *rfc1123_date(const time_t when)
 
 
 /* ---------------------------------------------------------------------------
- * A default reply for any occasion.
+ * A default reply for any (erroneous) occasion.
  */
 static void default_reply(struct connection *conn,
     const int errcode, const char *errname, const char *reason)
