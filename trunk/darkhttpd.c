@@ -319,6 +319,7 @@ static void default_reply(struct connection *conn,
     errcode, errname, pkgname, conn->reply_length);
 
     if (conn->header == NULL) errx(1, "out of memory in asprintf()");
+    conn->reply_type = REPLY_GENERATED;
 }
 
 
@@ -328,14 +329,14 @@ static void default_reply(struct connection *conn,
  */
 static void process_request(struct connection *conn)
 {
-    debugf(conn->request);
+    debugf("%s", conn->request);
 
     default_reply(conn, 501, "Not Implemented");
-    conn->state = DONE; /* FIXME: SEND_HEADER */
+    conn->state = SEND_HEADER;
 
-    #if 1
-    debugf("%s%s---\n", conn->header, conn->reply);
-    #endif
+    free(conn->request);
+    conn->request = NULL;
+    debugf("%s-=-\n", conn->header);
 }
 
 
@@ -375,11 +376,55 @@ static void poll_recv_request(struct connection *conn)
 
 
 
+/* ---------------------------------------------------------------------------
+ * Sending header.
+ */
 static void poll_send_header(struct connection *conn)
-{}
+{
+    ssize_t sent = send(conn->socket, conn->header + conn->header_sent,
+        conn->header_length - conn->header_sent, 0);
+    if (sent == -1) err(1, "send()");
+    if (sent == 0)
+    {
+        conn->state = DONE;
+        return;
+    }
+    conn->header_sent += (unsigned int)sent;
 
+    /* check if we're done sending */
+    if (conn->header_sent == conn->header_length)
+    {
+        if (!conn->header_dont_free) free(conn->header);
+        conn->header = NULL;
+        conn->state = SEND_REPLY;
+    }
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Sending reply. (FIXME: FROM FILE)
+ */
 static void poll_send_reply(struct connection *conn)
-{}
+{
+    ssize_t sent = send(conn->socket, conn->reply + conn->reply_sent,
+        conn->reply_length - conn->reply_sent, 0);
+    if (sent == -1) err(1, "send()");
+    if (sent == 0)
+    {
+        conn->state = DONE;
+        return;
+    }
+    conn->reply_sent += (unsigned int)sent;
+
+    /* check if we're done sending */
+    if (conn->reply_sent == conn->reply_length)
+    {
+        if (!conn->reply_dont_free) free(conn->reply);
+        conn->reply = NULL;
+        conn->state = DONE;
+    }
+}
 
 
 
