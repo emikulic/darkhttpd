@@ -187,6 +187,7 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static int want_chroot = 0;
 
+/* Default mimetype mappings - make sure this array is NULL terminated. */
 static const char *default_extension_map[] = {
     "text/html          html htm",
     "image/png          png",
@@ -291,6 +292,8 @@ static char *split_string(const char *src,
 {
     char *dest;
     assert(left <= right);
+    assert(left < strlen(src));
+    assert(right < strlen(src));
 
     dest = xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
@@ -327,10 +330,12 @@ static char *make_safe_uri(const char *uri)
     while (i < urilen) /* i is the left bound */
     {
         /* look for a non-slash */
-        for (; uri[i] == '/'; i++);
+        for (; uri[i] == '/'; i++)
+            ;
 
         /* look for the next slash */
-        for (j=i+1; j < urilen && uri[j] != '/'; j++);
+        for (j=i+1; j < urilen && uri[j] != '/'; j++)
+            ;
 
         /* FIXME: test this whole function */
 
@@ -464,7 +469,7 @@ static void parse_mimetype_line(const char *line)
         line[bound1] != '\t';
         bound1++)
     {
-        if (line[bound1] == 0) return; /* malformed line */
+        if (line[bound1] == '\0') return; /* malformed line */
     }
 
     lbound = bound1;
@@ -497,7 +502,8 @@ static void parse_mimetype_line(const char *line)
 
 
 /* ---------------------------------------------------------------------------
- * Adds contents of default_extension_map[] to mime_map list.
+ * Adds contents of default_extension_map[] to mime_map list.  The array must
+ * be NULL terminated.
  */
 static void parse_default_extension_map(void)
 {
@@ -525,7 +531,7 @@ static char *read_line(FILE *fp)
    int c;
 
    startpos = ftell(fp);
-   if (startpos == -1) err(EXIT_FAILURE, "ftell()");
+   if (startpos == -1) err(1, "ftell()");
 
    /* find end of line (or file) */
    linelen = 0;
@@ -540,7 +546,7 @@ static char *read_line(FILE *fp)
    if (linelen == 0 && c == EOF) return NULL;
 
    endpos = ftell(fp);
-   if (endpos == -1) err(EXIT_FAILURE, "ftell()");
+   if (endpos == -1) err(1, "ftell()");
 
    /* skip CRLF */
    if (c == (int)'\r' && fgetc(fp) == (int)'\n') endpos++;
@@ -548,17 +554,17 @@ static char *read_line(FILE *fp)
    buf = (char*)xmalloc(linelen + 1);
 
    /* rewind file to where the line stared and load the line */
-   if (fseek(fp, startpos, SEEK_SET) == -1) err(EXIT_FAILURE, "fseek()");
+   if (fseek(fp, startpos, SEEK_SET) == -1) err(1, "fseek()");
    numread = fread(buf, 1, linelen, fp);
    if (numread != linelen)
-      errx(EXIT_FAILURE, "fread() %u bytes, expecting %u bytes",
+      errx(1, "fread() %u bytes, expecting %u bytes",
       	numread, linelen);
 
    /* terminate buffer */
    buf[linelen] = 0;
 
    /* advance file pointer over the endline */
-   if (fseek(fp, endpos, SEEK_SET) == -1) err(EXIT_FAILURE, "fseek()");
+   if (fseek(fp, endpos, SEEK_SET) == -1) err(1, "fseek()");
 
    return buf;
 }
@@ -615,8 +621,8 @@ static const char *uri_content_type(const char *uri)
 
     for (period=urilen-1;
         period > 0 &&
-            uri[period] != '.' &&
-            (urilen-period-1) <= longest_ext;
+        uri[period] != '.' &&
+        (urilen-period-1) <= longest_ext;
         period--)
             ;
 
@@ -768,7 +774,11 @@ static void parse_commandline(const int argc, char *argv[])
        )
         usage(); /* no wwwroot given */
 
+#if 0 /* FIXME */
     wwwroot = expand_tilde( argv[1] ); /* ~/html -> /home/user/html */
+#else
+    wwwroot = xstrdup(argv[1]);
+#endif
     strip_endslash(&wwwroot);
 
     /* walk through the remainder of the arguments (if any) */
