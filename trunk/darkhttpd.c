@@ -12,6 +12,9 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
+ * 3. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ *
  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -29,10 +32,6 @@ static const char pkgname[]   = "darkhttpd/1.0";
 static const char copyright[] = "copyright (c) 2003 Emil Mikulic";
 static const char rcsid[]     =
     "$Id$";
-
-/*
- * Note: Solaris users: link with -lxnet
- */
 
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
@@ -771,8 +770,7 @@ static char *read_line(FILE *fp)
    if (fseek(fp, startpos, SEEK_SET) == -1) err(1, "fseek()");
    numread = fread(buf, 1, linelen, fp);
    if (numread != linelen)
-      errx(1, "fread() %u bytes, expecting %u bytes",
-      	numread, linelen);
+      errx(1, "fread() %u bytes, expecting %u bytes", numread, linelen);
 
    /* terminate buffer */
    buf[linelen] = 0;
