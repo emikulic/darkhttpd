@@ -438,107 +438,94 @@ static void consolidate_slashes(char *s)
  */
 static char *make_safe_uri(char *uri)
 {
-    char **elements, **reassembly, *out;
-    unsigned int slashes, elem, reasm, urilen, i, j;
+    char **elem, *out;
+    unsigned int slashes = 0, elements = 0;
+    size_t urilen, i, j, pos;
 
     assert(uri != NULL);
+debugf("make_safe_uri(`%s')\n", uri);
     if (uri[0] != '/') return NULL;
     consolidate_slashes(uri);
-    urilen = (unsigned int)strlen(uri);
+    urilen = strlen(uri);
 
     /* count the slashes */
     for (i=0, slashes=0; i<urilen; i++)
         if (uri[i] == '/') slashes++;
 
     /* make an array for the URI elements */
-    elements = xmalloc(sizeof(char*) * slashes);
-    for (i=0; i<slashes; i++) elements[i] = NULL;
+    elem = xmalloc(sizeof(char*) * slashes);
+    for (i=0; i<slashes; i++) elem[i] = NULL;
 
-    /* split by slash */
-    elem = i = 0;
-    while (i < urilen) /* i is the left bound */
+    /* split by slashes and build elem[] array */
+    for (i=1; i<urilen;)
     {
-        /* look for a non-slash */
-        for (; uri[i] == '/'; i++)
-            ;
-
         /* look for the next slash */
-        for (j=i+1; j < urilen && uri[j] != '/'; j++)
+        for (j=i; j<urilen && uri[j] != '/'; j++)
             ;
 
-        if (j <= urilen)
-            elements[elem++] = split_string(uri, i, j);
-
-        i = j; /* iterate */
-    }
-
-    reassembly = xmalloc(sizeof(char*) * slashes);
-    for (i=0; i<slashes; i++) reassembly[i] = NULL;
-    reasm = 0;
-
-    /* process */
-    for (i=0; i<elem; i++)
-    {
-        if (strcmp(elements[i], ".") == 0)
-        { /* do nothing */ }
-        else if (strcmp(elements[i], "..") == 0)
+        /* process uri[i,j) */
+        if ((j == i+1) && (uri[i] == '.'))
         {
-            /* try to backstep */
-            if (reasm == 0)
+            /* "." */
+            debugf("got `.'\n");
+        }
+        else if ((j == i+2) && (uri[i] == '.') && (uri[i+1] == '.'))
+        {
+            /* ".." */
+            debugf("got `..'\n");
+
+            if (elements == 0)
             {
-                /* user walked out of wwwroot! unsafe uri! */
-                for (j=0; j<elem; j++)
-                    if (elements[j] != NULL) free(elements[j]);
-                free(elements);
-                free(reassembly);
+                /* unsafe string so free elem[]; all its elements are free at
+                 * this point.
+                 */
+                free(elem);
                 return NULL;
             }
-            /* else */
-            reasm--;
-            reassembly[reasm] = NULL;
+            else
+            {
+                elements--;
+                free(elem[elements]);
+                elem[elements] = NULL; /* FIXME: not needed */
+            }
         }
         else
         {
-            /* plain copy */
-            reassembly[reasm++] = elements[i];
-        }
-    }
-
-    if (reasm == 0)
-    {
-        out = xstrdup("/");
-    }
-    else
-    {
-        /* reassemble */
-        size_t pos = 0;
-        out = xmalloc(urilen+1); /* it won't expand */
-
-        for (i=0; i<reasm; i++)
-        {
-            size_t delta = strlen(reassembly[i]);
-
-            assert(pos <= urilen);
-            out[pos++] = '/';
-
-            assert(pos+delta <= urilen);
-            memcpy(out+pos, reassembly[i], delta);
-            pos += delta;
+            /* token */
+            debugf("splitting [%d,%d): ", i, j);
+            elem[elements++] = split_string(uri, i, j);
+            debugf("splitting [%d,%d): element %d: `%s'\n",
+                i,j,elements,elem[elements-1]);
         }
 
-        if (uri[urilen-1] == '/') out[pos++] = '/';
+        i = j + 1; /* uri[j] is a slash - move along one */
+    }
+
+    /* reassemble */
+    out = xmalloc(urilen+1); /* it won't expand */
+    pos = 0;
+    for (i=0; i<elements; i++)
+    {
+        size_t delta = strlen(elem[i]);
+
         assert(pos <= urilen);
-        out[pos] = '\0';
+        out[pos++] = '/';
 
-        if (pos != urilen)
-            out = xrealloc(out, strlen(out)+1); /* shorten buffer */
+        assert(pos+delta <= urilen);
+        memcpy(out+pos, elem[i], delta);
+        free(elem[i]);
+        pos += delta;
     }
+    free(elem);
+
+    if (uri[urilen-1] == '/') out[pos++] = '/';
+    assert(pos <= urilen);
+    out[pos] = '\0';
+
+    if (pos != urilen)
+        out = xrealloc(out, strlen(out)+1); /* shorten buffer */
 
     debugf("`%s' -safe-> `%s'\n", uri, out);
-    for (j=0; j<elem; j++)
-        if (elements[j] != NULL) free(elements[j]);
-    free(elements);
-    free(reassembly);
     return out;
 }
 
@@ -548,7 +535,9 @@ static char *make_safe_uri(char *uri)
 static void test_make_safe_uri(void)
 {
     #define SAFE(from,to) do { char *uri = xstrdup(from), *tmp;\
-        tmp = make_safe_uri(uri); if (strcmp(tmp, to) != 0) \
+        tmp = make_safe_uri(uri); if (tmp == NULL) \
+        debugf("FAIL: `%s' unsafe, expecting `%s'\n", from, to); \
+        else if (strcmp(tmp, to) != 0) \
         debugf("FAIL: `%s' -> `%s', expecting `%s'\n", from, tmp, to); \
         free(tmp); free(uri); } while(0)
 
@@ -574,6 +563,7 @@ static void test_make_safe_uri(void)
     SAFE("/foo/bar/../moo/", "/foo/moo/");
     SAFE("/./moo/./../a/b/c/../.././d/../..", "/");
     SAFE("/./moo/./../a/b/c/../.././d/../../", "/");
+    SAFE("/./moo/./../a/b/c/../.././d/../../xyzzy/", "/xyzzy/");
 
     #undef SAFE
 
