@@ -19,7 +19,7 @@
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
  *  . Content-Type
- *  . Log Referer, User-Agent
+ *  x Log Referer, User-Agent
  *  . Ensure URIs requested are safe
  */
 
@@ -70,7 +70,7 @@ struct connection
     char *request;
     unsigned int request_length;
 
-    char *method, *uri;
+    char *method, *uri, *referer, *user_agent;
 
     char *header;
     unsigned int header_sent, header_length;
@@ -110,6 +110,18 @@ static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static int want_chroot = 0;
+
+
+
+/* ---------------------------------------------------------------------------
+ * realloc() that errx()s if it can't allocate.
+ */
+static void *xrealloc(void *original, const size_t size)
+{
+    void *ptr = realloc(original, size);
+    if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
+    return ptr;
+}
 
 
 
@@ -168,7 +180,7 @@ static void usage(void)
     "\t\tSpecifies how many concurrent connections to accept.\n"
     "\n"
     "\t--log filename (default: no logging)\n"
-    "\t\tSpecifies which file to log requests to.\n"
+    "\t\tSpecifies which file to append the request log to.\n"
     "\n"
     "\t--chroot (default: don't chroot)\n"
     "\t\tLocks server into wwwroot directory for added security.\n"
@@ -220,7 +232,7 @@ static void strip_endslash(char **str)
     if ((*str)[strlen(*str)-1] != '/') return;
 
     (*str)[strlen(*str)-1] = 0;
-    *str = (char*) realloc(*str, strlen(*str)+1);
+    *str = (char*) xrealloc(*str, strlen(*str)+1);
 }
 
 
@@ -303,6 +315,7 @@ static struct connection *new_connection(void)
     conn->last_active = time(NULL);
     conn->request = NULL;
     conn->method = conn->uri = NULL;
+    conn->referer = conn->user_agent = NULL;
     conn->request_length = 0;
     conn->header = NULL;
     conn->header_sent = conn->header_length = 0;
@@ -361,20 +374,11 @@ static void free_connection(struct connection *conn)
     if (conn->request != NULL) free(conn->request);
     if (conn->method != NULL) free(conn->method);
     if (conn->uri != NULL) free(conn->uri);
+    if (conn->referer != NULL) free(conn->referer);
+    if (conn->user_agent != NULL) free(conn->user_agent);
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_file != NULL) fclose(conn->reply_file);
-}
-
-
-/* ---------------------------------------------------------------------------
- * realloc() that errx()s if it can't allocate.
- */
-static void *xrealloc(void *original, const size_t size)
-{
-    void *ptr = realloc(original, size);
-    if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
-    return ptr;
 }
 
 
@@ -502,9 +506,39 @@ static void default_reply(struct connection *conn,
 
 
 /* ---------------------------------------------------------------------------
- * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET) and the
- * url (/).  Remember to deallocate the method and url buffers.  The method
- * will be returned in uppercase.
+ * Parses a single HTTP request field.  If the specified field doesn't exist,
+ * returns NULL.  Otherwise, you need to remember to deallocate the result.
+ *
+ * eg. "Referer: moo" with field="Referer: " returns "moo"
+ */
+static char *parse_field(const struct connection *conn, const char *field)
+{
+    unsigned int bound1, bound2;
+    char *pos, *buf;
+
+    /* find start */
+    pos = strstr(conn->request, field);
+    if (pos == NULL) return NULL;
+    bound1 = pos - conn->request + strlen(field);
+
+    /* find end */
+    for (bound2 = bound1;
+        conn->request[bound2] != '\r' &&
+        bound2 < conn->request_length; bound2++);
+
+    /* copy to buffer */
+    buf = (char*) xmalloc(bound2 - bound1 + 1);
+    memcpy(buf, conn->request+bound1, bound2-bound1);
+    buf[bound2-bound1] = 0;
+    return buf;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
+ * url (/), the referer (if given) and the user-agent (if given).  Remember to
+ * deallocate all these buffers.  The method will be returned in uppercase.
  */
 static void parse_request(struct connection *conn)
 {
@@ -528,6 +562,10 @@ static void parse_request(struct connection *conn)
     conn->uri = (char*)xmalloc(bound2 - bound1);
     memcpy(conn->uri, conn->request + bound1 + 1, bound2 - bound1 - 1);
     conn->uri[bound2 - bound1 - 1] = 0;
+
+    /* parse referer, user_agent */
+    conn->referer = parse_field(conn, "Referer: ");
+    conn->user_agent = parse_field(conn, "User-Agent: ");
 }
 
 
@@ -793,16 +831,17 @@ static void log_connection(const struct connection *conn)
     if (logfile == NULL) return;
 
     /* Separated by tabs:
-     * time client method uri http_code bytes_sent
+     * time client method uri http_code bytes_sent "referer" "user-agent"
      */
-
-    /* FIXME: Referer, User-Agent */
 
     inaddr.s_addr = conn->client;
 
-    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\n",
+    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\t\"%s\"\t\"%s\"\n",
         time(NULL), inet_ntoa(inaddr), conn->method, conn->uri,
-        conn->http_code, conn->total_sent);
+        conn->http_code, conn->total_sent,
+        (conn->referer == NULL)?"":conn->referer,
+        (conn->user_agent == NULL)?"":conn->user_agent
+        );
     fflush(logfile);
 }
 
@@ -918,7 +957,7 @@ int main(int argc, char *argv[])
     /* open logfile */
     if (logfile_name != NULL)
     {
-        logfile = fopen(logfile_name, "wb");
+        logfile = fopen(logfile_name, "ab");
         if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
     }
 
