@@ -45,6 +45,7 @@ static const char rcsid[]     =
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
@@ -2242,6 +2243,7 @@ static void httpd_poll(void)
 static void exit_quickly(int sig)
 {
     struct connection *conn, *next;
+    struct rusage r;
     size_t i;
 
     printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
@@ -2264,6 +2266,13 @@ static void exit_quickly(int sig)
     free(mime_map);
     free(keep_alive_field);
     printf("done!\n");
+
+    getrusage(RUSAGE_SELF, &r);
+    printf("CPU time used: %d.%06d user %d.%06d system\n",
+        r.ru_utime.tv_sec, r.ru_utime.tv_usec,
+        r.ru_stime.tv_sec, r.ru_stime.tv_usec
+    );
+
     exit(EXIT_SUCCESS);
 }
 
