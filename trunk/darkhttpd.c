@@ -17,7 +17,7 @@
  *  x If-Modified-Since.
  *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
  *  x Keep-alive connections.
- *  . Chroot
+ *  x Chroot
  *  x Set{uid|gid}.
  *  . Port to Win32.
  *  x Detect Content-Type from a list of content types.
@@ -2083,6 +2083,12 @@ int main(int argc, char *argv[])
         err(1, "signal(SIGQUIT)");
 
     /* security */
+    if (want_chroot)
+    {
+        if (chroot(wwwroot) == -1) err(1, "chroot(\"%s\")", wwwroot);
+        debugf("chrooted to `%s'\n", wwwroot);
+        wwwroot[0] = '\0'; /* empty string */
+    }
     if (drop_gid != INVALID_GID)
     {
         if (setgid(drop_gid) == -1) err(1, "setgid(%d)", drop_gid);
