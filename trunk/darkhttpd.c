@@ -443,7 +443,6 @@ static char *make_safe_uri(char *uri)
     size_t urilen, i, j, pos;
 
     assert(uri != NULL);
-debugf("make_safe_uri(`%s')\n", uri);
     if (uri[0] != '/') return NULL;
     consolidate_slashes(uri);
     urilen = strlen(uri);
@@ -465,15 +464,10 @@ debugf("make_safe_uri(`%s')\n", uri);
 
         /* process uri[i,j) */
         if ((j == i+1) && (uri[i] == '.'))
-        {
-            /* "." */
-            debugf("got `.'\n");
-        }
+            /* "." */;
         else if ((j == i+2) && (uri[i] == '.') && (uri[i+1] == '.'))
         {
             /* ".." */
-            debugf("got `..'\n");
-
             if (elements == 0)
             {
                 /* unsafe string so free elem[]; all its elements are free at
@@ -486,17 +480,9 @@ debugf("make_safe_uri(`%s')\n", uri);
             {
                 elements--;
                 free(elem[elements]);
-                elem[elements] = NULL; /* FIXME: not needed */
             }
         }
-        else
-        {
-            /* token */
-            debugf("splitting [%d,%d): ", i, j);
-            elem[elements++] = split_string(uri, i, j);
-            debugf("splitting [%d,%d): element %d: `%s'\n",
-                i,j,elements,elem[elements-1]);
-        }
+        else elem[elements++] = split_string(uri, i, j);
 
         i = j + 1; /* uri[j] is a slash - move along one */
     }
@@ -518,14 +504,13 @@ debugf("make_safe_uri(`%s')\n", uri);
     }
     free(elem);
 
-    if (uri[urilen-1] == '/') out[pos++] = '/';
+    if ((elements == 0) || (uri[urilen-1] == '/')) out[pos++] = '/';
     assert(pos <= urilen);
     out[pos] = '\0';
 
-    if (pos != urilen)
-        out = xrealloc(out, strlen(out)+1); /* shorten buffer */
+    /* shorten buffer if necessary */
+    if (pos != urilen) out = xrealloc(out, strlen(out)+1);
 
-    debugf("`%s' -safe-> `%s'\n", uri, out);
     return out;
 }
 
