@@ -30,9 +30,10 @@ static const char copyright[] = "copyright (c) 2003 Emil Mikulic";
 static const char rcsid[]     =
     "$Id$";
 
-/* Note: Solaris users: link with -lxnet */
-
-#define USE_ACCEPTFILTER
+/*
+ * Note: Solaris users: link with -lxnet
+ * Note: FreeBSD users: -DNO_ACCEPTFILTER to turn off acceptfilter
+ */
 
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
@@ -459,7 +460,7 @@ static void nonblock_socket(const int sock)
  */
 static void acceptfilter_socket(const int sock)
 {
-#if defined(__FreeBSD__) && defined(USE_ACCEPTFILTER)
+#if defined(__FreeBSD__) && !defined(NO_ACCEPTFILTER)
     struct accept_filter_arg filt = {"httpready", ""};
     if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
         &filt, sizeof(filt)) == -1)
