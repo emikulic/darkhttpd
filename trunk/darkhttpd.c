@@ -400,7 +400,8 @@ static char *split_string(const char *src,
 
 
 /* ---------------------------------------------------------------------------
- * Consolidate slashes in-place.
+ * Consolidate slashes in-place by shifting parts of the string over repeated
+ * slashes.
  */
 static void consolidate_slashes(char *s)
 {
@@ -523,7 +524,7 @@ static void test_make_safe_uri(void)
         debugf("FAIL: `%s' unsafe, expecting `%s'\n", from, to); \
         else if (strcmp(tmp, to) != 0) \
         debugf("FAIL: `%s' -> `%s', expecting `%s'\n", from, tmp, to); \
-        safefree(tmp); free(uri); } while(0)
+        safefree(tmp); safefree(uri); } while(0)
 
     SAFE("/", "/");
     SAFE("//", "/");
