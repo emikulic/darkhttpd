@@ -1,12 +1,29 @@
-ALLWARNS = -Wall -Wshadow -Wpointer-arith -Wcast-qual \
--Wcast-align -Wwrite-strings -Wconversion -Waggregate-return \
--Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
--Wredundant-decls -Wnested-externs -Wlong-long -Winline 
+#
+# darkhttpd (c) 2003, Emil Mikulic.
+#
 
-CFLAGS = -O -pipe -ansi -pedantic -g $(ALLWARNS)
+CC ?= cc
+CFLAGS ?= -pipe -O2
+
+TARGETS = bsd linux solaris
+.PHONY: all $(TARGETS)
 
 all:
-	gcc -o out $(CFLAGS) darkhttpd.c
+	@echo "+----- ---- --- -- -"
+	@echo "| Please run:"
+	@echo "|     make <target>"
+	@echo "| Where target is one of the following:"
+	@echo "|     $(TARGETS)"
+	@echo "+----- ---- --- -- -"
 
-splint:
-	splint -weak -skipposixheaders +posixlib +stats darkhttpd.c
+bsd linux:
+	make darkhttpd
+
+solaris:
+	make darkhttpd LIBS=-lxnet
+
+darkhttpd: darkhttpd.c
+	$(CC) $(CFLAGS) $(LIBS) $< -o $@
+
+clean:
+	rm -f darkhttpd core darkhttpd.core
