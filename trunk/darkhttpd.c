@@ -423,8 +423,7 @@ static void appendl(struct apbuf *buf, const char *s, const size_t len)
 
 static void append(struct apbuf *buf, const char *s)
 {
-    size_t len = strlen(s);
-    appendl(buf, s, len);
+    appendl(buf, s, strlen(s));
 }
 
 
