@@ -11,16 +11,16 @@
  * TODO:
  *  x Ignore SIGPIPE.
  *  x Actually serve files.
- *  . Generate directory entries.
+ *  . Generate directory listings.
  *  x Log to file.
  *  . Partial content.
  *  . If-Modified-Since.
  *  . Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
- *  . Content-Type
- *  x Log Referer, User-Agent
- *  . Ensure URIs requested are safe
+ *  . Detect Content-Type from a list of content types.
+ *  x Log Referer, User-Agent.
+ *  . Ensure URIs requested are safe.
  */
 
 #include <sys/types.h>
@@ -244,10 +244,14 @@ static void parse_commandline(const int argc, char *argv[])
 {
     int i;
 
-    if (argc < 2) usage(); /* no wwwroot given */
-    wwwroot = expand_tilde( argv[1] ); /* ~/public_html/ */
+    if (
+        (argc < 2) ||
+        (argc == 2 && strcmp(argv[1], "--help") == 0)
+       )
+        usage(); /* no wwwroot given */
+
+    wwwroot = expand_tilde( argv[1] ); /* ~/html -> /home/user/html */
     strip_endslash(&wwwroot);
-    debugf("wwwroot = ``%s''\n", wwwroot);
 
     /* walk through the remainder of the arguments (if any) */
     for (i=2; i<argc; i++)
