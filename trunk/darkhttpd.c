@@ -53,10 +53,10 @@ static const char rcsid[]     =
 
 #ifdef NDEBUG
  #define safefree free
- #define debugf (void)
+ static const int debug = 0;
 #else
  #define safefree(x) do { free(x); x = NULL; } while(0)
- #define debugf printf
+ static const int debug = 0;
 #endif
 
 #ifndef min
@@ -1123,7 +1123,7 @@ static void accept_connection(void)
     conn->client = addrin.sin_addr.s_addr;
     LIST_INSERT_HEAD(&connlist, conn, entries);
 
-    debugf("accepted connection from %s:%u\n",
+    if (debug) printf("accepted connection from %s:%u\n",
         inet_ntoa(addrin.sin_addr),
         ntohs(addrin.sin_port) );
 }
@@ -1137,7 +1137,7 @@ static void log_connection(const struct connection *conn);
  */
 static void free_connection(struct connection *conn)
 {
-    debugf("free_connection(%d)\n", conn->socket);
+    if (debug) printf("free_connection(%d)\n", conn->socket);
     log_connection(conn);
     if (conn->socket != -1) xclose(conn->socket);
     if (conn->request != NULL) safefree(conn->request);
@@ -1159,7 +1159,7 @@ static void free_connection(struct connection *conn)
 static void recycle_connection(struct connection *conn)
 {
     int socket_tmp = conn->socket;
-    debugf("recycle_connection(%d)\n", socket_tmp);
+    if (debug) printf("recycle_connection(%d)\n", socket_tmp);
     conn->socket = -1; /* so free_connection() doesn't close it */
     free_connection(conn);
     conn->socket = socket_tmp;
@@ -1217,7 +1217,8 @@ static void poll_check_timeout(struct connection *conn)
     {
         if (time(NULL) - conn->last_active >= idletime)
         {
-            debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
+            if (debug) printf("poll_check_timeout(%d) caused closure\n",
+                conn->socket);
             conn->conn_close = 1;
             conn->state = DONE;
         }
@@ -1755,7 +1756,7 @@ static void process_get(struct connection *conn)
         mimetype = uri_content_type(safe_url);
     }
     safefree(safe_url);
-    debugf("uri=%s, target=%s, content-type=%s\n",
+    if (debug) printf("uri=%s, target=%s, content-type=%s\n",
         conn->uri, target, mimetype);
 
     /* open file */
@@ -1807,7 +1808,7 @@ static void process_get(struct connection *conn)
     if (if_mod_since != NULL &&
         strcmp(if_mod_since, lastmod) == 0)
     {
-        debugf("not modified since %s\n", if_mod_since);
+        if (debug) printf("not modified since %s\n", if_mod_since);
         default_reply(conn, 304, "Not Modified", "");
         conn->header_only = 1;
         safefree(if_mod_since);
@@ -1864,7 +1865,8 @@ static void process_get(struct connection *conn)
             mimetype, lastmod
         );
         conn->http_code = 206;
-        debugf("sending %u-%u/%u\n", (unsigned int)from, (unsigned int)to,
+        if (debug) printf("sending %u-%u/%u\n",
+            (unsigned int)from, (unsigned int)to,
             (unsigned int)filestat.st_size);
     }
     else /* no range stuff */
@@ -1947,11 +1949,13 @@ static void poll_recv_request(struct connection *conn)
     ssize_t recvd;
 
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
-    debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, (int)recvd);
+    if (debug) printf("poll_recv_request(%d) got %d bytes\n",
+        conn->socket, (int)recvd);
     if (recvd <= 0)
     {
         if (recvd == -1)
-            debugf("recv(%d) error: %s\n", conn->socket, strerror(errno));
+            if (debug) printf("recv(%d) error: %s\n",
+                conn->socket, strerror(errno));
         conn->conn_close = 1;
         conn->state = DONE;
         return;
@@ -1994,13 +1998,14 @@ static void poll_send_header(struct connection *conn)
     sent = send(conn->socket, conn->header + conn->header_sent,
         conn->header_length - conn->header_sent, 0);
     conn->last_active = time(NULL);
-    debugf("poll_send_header(%d) sent %d bytes\n", conn->socket, (int)sent);
+    if (debug) printf("poll_send_header(%d) sent %d bytes\n",
+        conn->socket, (int)sent);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
     {
-        if (sent == -1)
-            debugf("send(%d) error: %s\n", conn->socket, strerror(errno));
+        if (debug && (sent == -1))
+            printf("send(%d) error: %s\n", conn->socket, strerror(errno));
         conn->conn_close = 1;
         conn->state = DONE;
         return;
@@ -2093,7 +2098,7 @@ static void poll_send_reply(struct connection *conn)
             conn->reply_length - conn->reply_sent);
     }
     conn->last_active = time(NULL);
-    debugf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
+    if (debug) printf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
         conn->socket, (int)sent, (int)conn->reply_start,
         (int)conn->reply_sent,
         (int)(conn->reply_sent + sent - 1),
@@ -2103,9 +2108,14 @@ static void poll_send_reply(struct connection *conn)
     if (sent < 1)
     {
         if (sent == -1)
-            debugf("send(%d) error: %s\n", conn->socket, strerror(errno));
+        {
+            if (debug) printf("send(%d) error: %s\n",
+                conn->socket, strerror(errno));
+        }
         else if (sent == 0)
-            debugf("send(%d) closure\n", conn->socket);
+        {
+            if (debug) printf("send(%d) closure\n", conn->socket);
+        }
         conn->conn_close = 1;
         conn->state = DONE;
         return;
