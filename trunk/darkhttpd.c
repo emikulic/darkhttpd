@@ -1666,6 +1666,38 @@ static void poll_send_header(struct connection *conn)
 
 
 /* ---------------------------------------------------------------------------
+ * Send chunk on socket <s> from FILE *fp, starting at <ofs> and of size
+ * <size>.  Use sendfile() is possible since it's zero-copy on some platforms.
+ * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
+ * read error.
+ */
+static ssize_t send_from_file(int s, FILE *fp, long ofs, size_t size)
+{
+#ifdef __FreeBSD__
+    off_t sent;
+    if (sendfile(fileno(fp), s, (off_t)ofs, size, NULL, &sent, 0) == -1)
+    {
+        if (errno == EAGAIN)
+            return sent;
+        else
+            return -1;
+    }
+    else return size;
+#else
+    #define BUFSIZE 20000
+    char buf[BUFSIZE];
+    size_t amount = min((size_t)BUFSIZE, size);
+    #undef BUFSIZE
+
+    if (fseek(fp, ofs, SEEK_SET) == -1) err(1, "fseek(%ld)", ofs);
+    if (fread(buf, amount, 1, fp) != 1) return -2;
+    return send(s, buf, amount, 0);
+#endif
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Sending reply.
  */
 static void poll_send_reply(struct connection *conn)
@@ -1684,33 +1716,24 @@ static void poll_send_reply(struct connection *conn)
     }
     else
     {
-        /* from file! */
-        #define BUFSIZE 40000
-        char buf[BUFSIZE];
-        size_t amount = min((size_t)BUFSIZE,
+        sent = send_from_file(conn->socket, conn->reply_file,
+            (long)(conn->reply_start + conn->reply_sent),
             conn->reply_length - conn->reply_sent);
-        #undef BUFSIZE
 
-        if (fseek(conn->reply_file,
-            (long)(conn->reply_start + conn->reply_sent), SEEK_SET) == -1)
-            err(1, "fseek(%d)", conn->reply_start + conn->reply_sent);
-
-        if (fread(buf, amount, 1, conn->reply_file) != 1)
+        if (sent == -2)
         {
             if (feof(conn->reply_file))
-            {
-                conn->conn_close = 1;
-                conn->state = DONE;
                 fprintf(stderr, "(%d) premature end of file\n",
-                    conn->socket);
-                return;
-            }
-            
-            fprintf(stderr, "error: %s\n",
-                strerror( ferror(conn->reply_file) ));
-            errx(1, "fread()");
+                conn->socket);
+            else
+                fprintf(stderr, "fread() error: %s\n",
+                    strerror( ferror(conn->reply_file) )); /* <- FIXME? */
+
+            conn->conn_close = 1;
+            conn->state = DONE;
+            return;
         }
-        sent = send(conn->socket, buf, amount, 0);
+
     }
     conn->last_active = time(NULL);
     debugf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
