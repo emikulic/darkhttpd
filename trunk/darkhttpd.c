@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -183,6 +184,48 @@ static void usage(void)
 
 
 /* ---------------------------------------------------------------------------
+ * Expands a path beginning with a tilde.  The returned string needs to be
+ * deallocated.
+ */
+static char *expand_tilde(const char *path)
+{
+    const char *home;
+    char *tmp = NULL;
+
+    if (path[0] != '~') return strdup(path); /* do nothing */
+
+    home = getenv("HOME");
+    if (home == NULL)
+    {
+        /* no ENV variable, try getpwuid() */
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) home = pw->pw_dir;
+    }
+
+    if (home == NULL) errx(1, "can't expand `~'");
+
+    asprintf(&tmp, "%s%s", home, path+1);
+    if (tmp == NULL) errx(1, "out of memory in asprintf()");
+    return tmp;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Strips the ending slash from a string (if there is one)
+ */
+static void strip_endslash(char **str)
+{
+    if (strlen(*str) < 1) return;
+    if ((*str)[strlen(*str)-1] != '/') return;
+
+    (*str)[strlen(*str)-1] = 0;
+    *str = (char*) realloc(*str, strlen(*str)+1);
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Parses commandline options.
  */
 static void parse_commandline(const int argc, char *argv[])
@@ -190,7 +233,9 @@ static void parse_commandline(const int argc, char *argv[])
     int i;
 
     if (argc < 2) usage(); /* no wwwroot given */
-    wwwroot = argv[1];
+    wwwroot = expand_tilde( argv[1] ); /* ~/public_html/ */
+    strip_endslash(&wwwroot);
+    debugf("wwwroot = ``%s''\n", wwwroot);
 
     /* walk through the remainder of the arguments (if any) */
     for (i=2; i<argc; i++)
