@@ -9,6 +9,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/queue.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <err.h>
@@ -17,8 +18,16 @@
 #include <string.h>
 #include <unistd.h>
 
+/* for easy defusal */
+#define debugf printf
+
+LIST_HEAD(conn_list_head, connection) connlist =
+    LIST_HEAD_INITIALIZER(conn_list_head);
+
 struct connection
 {
+    LIST_ENTRY(connection) entries;
+
     int socket;
     enum {
         RECV_REQUEST,   /* receiving request */
@@ -38,6 +47,8 @@ struct connection
     FILE *reply_file;
     unsigned int reply_sent, reply_length;
 };
+
+
 
 /* defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
@@ -81,7 +92,7 @@ static void init_sockin(void)
             sizeof(struct sockaddr)) == -1)
         err(1, "bind(port %u)", bindport);
 
-    printf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
+    debugf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
 
     /* listen on socket */
     if (listen(sockin, max_connections) == -1)
@@ -167,12 +178,118 @@ static void parse_commandline(const int argc, char *argv[])
 
 
 /* ---------------------------------------------------------------------------
+ * malloc that errx()s if it can't allocate.
+ */
+static void *xmalloc(const size_t size)
+{
+    void *ptr = malloc(size);
+    if (ptr == NULL) errx(1, "can't allocate %u bytes", size);
+    return ptr;
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Accept a connection from sockin and add it to the connection queue.
  */
 static void accept_connection(void)
 {
-    /* FIXME */
+    struct sockaddr_in addrin;
+    socklen_t sin_size;
+    struct connection *conn;
+
+    /* allocate and initialise struct connection */
+    conn = (struct connection *)xmalloc(sizeof(struct connection));
+    conn->socket = -1;
+    conn->request = NULL;
+    conn->request_length = 0;
+    conn->header = NULL;
+    conn->header_sent = conn->header_length = 0;
+    conn->reply = NULL;
+    conn->reply_file = NULL;
+
+    sin_size = (socklen_t)sizeof(struct sockaddr);
+    conn->socket = accept(sockin, (struct sockaddr *)&addrin,
+            &sin_size);
+    if (conn->socket == -1) err(1, "accept()");
+
+    conn->state = RECV_REQUEST;
+    LIST_INSERT_HEAD(&connlist, conn, entries);
+
+    debugf("accepted connection from %s:%u\n",
+        inet_ntoa(addrin.sin_addr),
+        ntohs(addrin.sin_port) );
 }
+
+
+
+/* ---------------------------------------------------------------------------
+ * Cleanly deallocate the internals of a struct connection
+ */
+static void free_connection(struct connection *conn)
+{
+    if (conn->socket != -1) close(conn->socket);
+    if (conn->request != NULL) free(conn->request);
+    if (conn->header != NULL) free(conn->header);
+    if (conn->reply != NULL) free(conn->reply);
+    if (conn->reply_file != NULL) fclose(conn->reply_file);
+}
+
+
+/* ---------------------------------------------------------------------------
+ * realloc that errx()s if it can't allocate.
+ */
+static void *xrealloc(void *original, const size_t size)
+{
+    void *ptr = realloc(original, size);
+    if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
+    return ptr;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Receiving request.
+ */
+static void poll_recv_request(struct connection *conn)
+{
+    #define BUFSIZE 65536
+    char buf[BUFSIZE];
+    ssize_t recvd;
+
+    recvd = recv(conn->socket, buf, BUFSIZE, 0);
+    if (recvd == -1) err(1, "recv()");
+    if (recvd == 0)
+    {
+        /* socket closed on us */
+        conn->state = DONE;
+        return;
+    }
+
+    /* append to conn->request */
+    conn->request = xrealloc(conn->request, conn->request_length + recvd);
+    memcpy(conn->request+conn->request_length, buf, recvd);
+    conn->request_length += recvd;
+
+    #if 1
+    { int i;
+    printf("recvd %d: ", recvd);
+    for (i=0; i<recvd; i++) printf("%02x ",
+    conn->request[conn->request_length-recvd+i]);
+    printf("\n");
+    }
+    #endif
+
+    #undef BUFSIZE
+}
+
+
+
+static void poll_send_header(struct connection *conn)
+{}
+
+static void poll_send_reply(struct connection *conn)
+{}
 
 
 
@@ -183,23 +300,71 @@ static void accept_connection(void)
 static void httpd_poll(void)
 {
     fd_set recv_set, send_set;
-    int max_fd = 0, select_ret;
-
-    #define MAX_FD_SET(sock, fdset) FD_SET(sock,fdset),\
-                                    max_fd = (max_fd < sock) ? sock : max_fd
+    int max_fd, select_ret;
+    struct connection *conn;
 
     FD_ZERO(&recv_set);
     FD_ZERO(&send_set);
+    max_fd = 0;
+
+    /* set recv/send fd_sets */
+    #define MAX_FD_SET(sock, fdset) FD_SET(sock,fdset), \
+                                    max_fd = (max_fd<sock) ? sock : max_fd
 
     MAX_FD_SET(sockin, &recv_set);
+
+    LIST_FOREACH(conn, &connlist, entries)
+    switch (conn->state)
+    {
+    case RECV_REQUEST:
+        MAX_FD_SET(conn->socket, &recv_set);
+        break;
+
+    case SEND_HEADER:
+    case SEND_REPLY:
+        MAX_FD_SET(conn->socket, &send_set);
+        break;
+
+    case DONE:
+        /* clean out stale connections while we're at it */
+        LIST_REMOVE(conn, entries);
+        free_connection(conn);
+        free(conn);
+        break;
+
+    default: errx(1, "invalid state");
+    }
     #undef MAX_FD_SET
 
+    debugf("select("), fflush(stdout);
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL, NULL);
     if (select_ret == 0) errx(1, "select() timed out");
     if (select_ret == -1) err(1, "select()");
+    debugf(")\n");
 
+    /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
-    /* FIXME incomplete */
+
+    LIST_FOREACH(conn, &connlist, entries)
+    switch (conn->state)
+    {
+    case RECV_REQUEST:
+        if (FD_ISSET(conn->socket, &recv_set))
+            poll_recv_request(conn);
+        break;
+
+    case SEND_HEADER:
+        if (FD_ISSET(conn->socket, &send_set))
+            poll_send_header(conn);
+        break;
+
+    case SEND_REPLY:
+        if (FD_ISSET(conn->socket, &send_set))
+            poll_send_reply(conn);
+        break;
+
+    default: errx(1, "invalid state");
+    }
 }
 
 
