@@ -1575,9 +1575,6 @@ static void poll_send_header(struct connection *conn)
     /* check if we're done sending */
     if (conn->header_sent == conn->header_length)
     {
-        if (!conn->header_dont_free) free(conn->header);
-        conn->header = NULL;
-
         if (conn->header_only)
             conn->state = DONE;
         else
@@ -1651,20 +1648,7 @@ static void poll_send_reply(struct connection *conn)
     conn->total_sent += (unsigned int)sent;
 
     /* check if we're done sending */
-    if (conn->reply_sent == conn->reply_length)
-    {
-        if (!conn->reply_dont_free && conn->reply != NULL)
-        {
-            free(conn->reply);
-            conn->reply = NULL;
-        }
-        if (conn->reply_file != NULL)
-        {
-            fclose(conn->reply_file);
-            conn->reply_file = NULL;
-        }
-        conn->state = DONE;
-    }
+    if (conn->reply_sent == conn->reply_length) conn->state = DONE;
 }
 
 
