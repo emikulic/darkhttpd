@@ -265,13 +265,9 @@ static const char default_mimetype[] = "application/octet-stream";
 
 
 
-/* ---------------------------------------------------------------------------
- * Returns Connection or Keep-Alive field, depending on conn_close.
- */
-static const char *keep_alive(const struct connection *conn)
-{
-    return (conn->conn_close ? "Connection: close\r\n" : keep_alive_field);
-}
+/* Connection or Keep-Alive field, depending on conn_close. */
+#define keep_alive(conn) ((conn)->conn_close ? \
+    "Connection: close\r\n" : keep_alive_field)
 
 
 
