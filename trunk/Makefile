@@ -3,7 +3,7 @@ ALLWARNS = -Wall -Wshadow -Wpointer-arith -Wcast-qual \
 -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
 -Wredundant-decls -Wnested-externs -Wlong-long -Winline 
 
-CFLAGS = -O -pipe -ansi -pedantic -g $(ALLWARNS) -DNDEBUG
+CFLAGS = -O -pipe -ansi -pedantic -g $(ALLWARNS)
 
 all:
 	gcc -o out $(CFLAGS) darkhttpd.c
