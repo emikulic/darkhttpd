@@ -1818,6 +1818,7 @@ static void httpd_poll(void)
         switch (conn->state)
         {
         case RECV_REQUEST:
+        recv_request:
             MAX_FD_SET(conn->socket, &recv_set);
             bother_with_timeout = 1;
             break;
@@ -1840,8 +1841,7 @@ static void httpd_poll(void)
             {
                 recycle_connection(conn);
                 /* And enqueue as RECV_REQUEST. */
-                MAX_FD_SET(conn->socket, &recv_set);
-                bother_with_timeout = 1;
+                goto recv_request;
             }
             break;
 
