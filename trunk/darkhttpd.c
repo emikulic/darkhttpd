@@ -455,8 +455,8 @@ static void parse_mimetype_line(const char *line)
 
     /* parse mimetype */
     for (pad=0; line[pad] == ' ' || line[pad] == '\t'; pad++);
-    if (line[pad] == 0 ||   /* empty line */
-        line[pad] == '#')   /* comment */
+    if (line[pad] == '\0' || /* empty line */
+        line[pad] == '#')    /* comment */
         return;
 
     for (bound1=pad+1;
@@ -474,7 +474,7 @@ static void parse_mimetype_line(const char *line)
 
         /* find beginning of extension */
         for (; line[lbound] == ' ' || line[lbound] == '\t'; lbound++);
-        if (line[lbound] == 0) return; /* end of line */
+        if (line[lbound] == '\0') return; /* end of line */
 
         /* find end of extension */
         for (rbound = lbound;
@@ -489,8 +489,8 @@ static void parse_mimetype_line(const char *line)
         free(mimetype);
         free(extension);
 
-        if (line[rbound] == 0) return; /* end of line */
-        else lbound = rbound+1;
+        if (line[rbound] == '\0') return; /* end of line */
+        else lbound = rbound + 1;
     }
 }
 
