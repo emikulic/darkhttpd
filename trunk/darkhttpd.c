@@ -997,7 +997,7 @@ static void parse_commandline(const int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    wwwroot = argv[1];
+    wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
     if (wwwroot[strlen(wwwroot)-1] == '/') wwwroot[strlen(wwwroot)-1] = '\0';
 
@@ -2282,6 +2282,7 @@ static void exit_quickly(int sig)
     }
     free(mime_map);
     free(keep_alive_field);
+    free(wwwroot);
     printf("done!\n");
 
     getrusage(RUSAGE_SELF, &r);
