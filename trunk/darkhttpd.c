@@ -254,13 +254,13 @@ static char *make_safe_uri(const char *uri)
     out = (char*) xmalloc(urilen+1);
     out[0] = '\0';
     
-    for (i=0; reassembly[i] != NULL; i++)
+    for (i=0; i<reasm; i++)
     {
         strcat(out, "/");
         strcat(out, reassembly[i]);
     }
 
-    out = (char*) xrealloc(out, strlen(out)+1);
+    out = (char*) xrealloc(out, strlen(out)+1); /* shorten buffer */
     debugf("`%s' -safe-> `%s'\n", uri, out);
     return out;
 }
