@@ -510,47 +510,86 @@ static void parse_default_extension_map(void)
 
 
 /* ---------------------------------------------------------------------------
+ * read_line - read a line from [fp], return its contents in a
+ * dynamically allocated buffer, not including the line ending.
+ *
+ * Handles CR, CRLF and LF line endings, as well as NOEOL correctly.  If
+ * already at EOF, returns NULL.  Will err() or errx() in case of
+ * unexpected file error or running out of memory.
+ */
+static char *read_line(FILE *fp)
+{
+   char *buf;
+   long startpos, endpos;
+   size_t linelen, numread;
+   int c;
+
+   startpos = ftell(fp);
+   if (startpos == -1) err(EXIT_FAILURE, "ftell()");
+
+   /* find end of line (or file) */
+   linelen = 0;
+   for (;;)
+   {
+      c = fgetc(fp);
+      if (c == EOF || c == (int)'\n' || c == (int)'\r') break;
+      linelen++;
+   }
+
+   /* return NULL on EOF (and empty line) */
+   if (linelen == 0 && c == EOF) return NULL;
+
+   endpos = ftell(fp);
+   if (endpos == -1) err(EXIT_FAILURE, "ftell()");
+
+   /* skip CRLF */
+   if (c == (int)'\r' && fgetc(fp) == (int)'\n') endpos++;
+
+   buf = (char*)xmalloc(linelen + 1);
+
+   /* rewind file to where the line stared and load the line */
+   if (fseek(fp, startpos, SEEK_SET) == -1) err(EXIT_FAILURE, "fseek()");
+   numread = fread(buf, 1, linelen, fp);
+   if (numread != linelen)
+      errx(EXIT_FAILURE, "fread() %u bytes, expecting %u bytes",
+      	numread, linelen);
+
+   /* terminate buffer */
+   buf[linelen] = 0;
+
+   /* advance file pointer over the endline */
+   if (fseek(fp, endpos, SEEK_SET) == -1) err(EXIT_FAILURE, "fseek()");
+
+   return buf;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Removes the ending newline in a string, if there is one.
+ */
+static void chomp(char *str)
+{
+   size_t pos = strlen(str) - 1;
+   if ((pos >= 0) && (str[pos] == '\n')) str[pos] = '\0';
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Adds contents of specified file to mime_map list.
  */
 static void parse_extension_map_file(const char *filename)
 {
-    char *buf = NULL;
+    char *buf;
     FILE *fp = fopen(filename, "rb");
     if (fp == NULL) err(1, "fopen(\"%s\")", filename);
 
-    while (!feof(fp))
+    while ( (buf = read_line(fp)) != NULL )
     {
-        size_t line_len;
-        char c;
-        long filepos;
-
-        /* store current file position */
-        filepos = ftell(fp);
-        if (filepos == -1) err(1, "ftell()");
-
-        /* read to newline */
-        for (c=0, line_len=0;
-            !feof(fp) && c != '\n' && c != '\r';
-            c = fgetc(fp), line_len++);
-
-        /* jump back to beginning of current line */
-        if (fseek(fp, filepos, SEEK_SET) == -1)
-            err(1, "fseek()");
-
-        if (line_len-1 != 0)
-        {
-            /* alloc and fill up buf */
-            buf = xmalloc(line_len);
-            if (fread(buf, 1, line_len-1, fp) != (line_len-1))
-                err(1, "fread()");
-            buf[line_len-1] = '\0';
-
-            /* parse it */
-            parse_mimetype_line(buf);
-            free(buf);
-        }
-
-        c = fgetc(fp); /* read last char (newline) */
+        chomp(buf);
+        parse_mimetype_line(buf);
+        free(buf);
     }
 
     fclose(fp);
