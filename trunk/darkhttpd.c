@@ -438,6 +438,7 @@ static void appendf(struct apbuf *buf, const char *format, ...)
     va_end(va);
 
     appendl(buf, tmp, len);
+    safefree(tmp);
 }
 
 
@@ -1726,6 +1727,7 @@ static void process_get(struct connection *conn)
             xasprintf(&target, "%s%s", wwwroot, safe_url);
             generate_dir_listing(conn, target);
             safefree(target);
+            safefree(safe_url);
             return;
         }
         mimetype = uri_content_type(index_name);
