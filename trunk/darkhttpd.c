@@ -70,20 +70,20 @@ struct connection
 
     /* char request[request_length+1] is null-terminated */
     char *request;
-    unsigned int request_length;
+    size_t request_length;
 
     /* request fields */
     char *method, *uri, *referer, *user_agent;
 
     char *header;
-    unsigned int header_sent, header_length;
+    size_t header_length, header_sent;
     int header_dont_free, header_only, http_code;
 
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
     char *reply, *lastmod; /* reply lastmod, not request if-mod-since */
     int reply_dont_free;
     FILE *reply_file;
-    unsigned int reply_sent, reply_length;
+    size_t reply_length, reply_sent;
 
     unsigned int total_sent; /* header + body = total, for logging */
 };
@@ -178,8 +178,9 @@ static void *xrealloc(void *original, const size_t size)
  */
 static char *xstrdup(const char *src)
 {
-    char *dest = strdup(src);
-    if (dest == NULL) errx(1, "out of memory in strdup()");
+    size_t len = strlen(src);
+    char *dest = (char*) xmalloc(len + 1);
+    memcpy(dest, src, len+1);
     return dest;
 }
 
@@ -203,7 +204,7 @@ static unsigned int xvasprintf(char **ret, const char *format, va_list ap)
 static unsigned int xasprintf(char **ret, const char *format, ...)
 {
     va_list va;
-    int len;
+    unsigned int len;
 
     va_start(va, format);
     len = xvasprintf(ret, format, va);
@@ -228,7 +229,7 @@ static void nonblock_socket(const int sock)
  * Split string out of src with range [left:right-1]
  */
 static char *split_string(const char *src,
-    const unsigned int left, const unsigned int right)
+    const size_t left, const size_t right)
 {
     char *dest = (char*) xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
@@ -248,7 +249,7 @@ static char *make_safe_uri(const char *uri)
     unsigned int slashes, elem, reasm, urilen, i, j;
 
     if (uri[0] != '/') return NULL;
-    urilen = strlen(uri);
+    urilen = (unsigned int)strlen(uri);
 
     /* count the slashes */
     for (i=0, slashes=0; i<urilen; i++)
@@ -445,11 +446,11 @@ static void parse_extension_map_file(const char *filename)
 static const char *uri_content_type(const char *uri)
 {
     struct mime_mapping *mapping;
-    int urilen = strlen(uri);
+    size_t urilen = strlen(uri);
 
     LIST_FOREACH(mapping, &mime_map, entries)
     {
-        int extlen = strlen(mapping->extension);
+        size_t extlen = strlen(mapping->extension);
         if (urilen >= extlen+3) /* "/a." + "ext" */
         {
             if (uri[urilen-1-extlen] == '.' &&
@@ -652,17 +653,23 @@ static struct connection *new_connection(void)
     conn->client = INADDR_ANY;
     conn->last_active = time(NULL);
     conn->request = NULL;
-    conn->method = conn->uri = NULL;
-    conn->referer = conn->user_agent = NULL;
+    conn->method = NULL;
+    conn->uri = NULL;
+    conn->referer = NULL;
+    conn->user_agent = NULL;
     conn->request_length = 0;
     conn->header = NULL;
-    conn->header_sent = conn->header_length = 0;
-    conn->header_dont_free = conn->header_only = 0;
+    conn->header_sent = 0;
+    conn->header_length = 0;
+    conn->header_dont_free = 0;
+    conn->header_only = 0;
     conn->http_code = 0;
-    conn->reply = conn->lastmod = NULL;
+    conn->reply = NULL;
+    conn->lastmod = NULL;
     conn->reply_dont_free = 0;
     conn->reply_file = NULL;
-    conn->reply_sent = conn->reply_length = 0;
+    conn->reply_sent = 0;
+    conn->reply_length = 0;
     conn->total_sent = 0;
 
     /* Make it harmless so it gets garbage-collected if it should, for some
@@ -761,8 +768,9 @@ static char _date[MAX_DATE_LENGTH + 1];
 static char *rfc1123_date(const time_t when)
 {
     time_t now = when;
-    strftime(_date, MAX_DATE_LENGTH,
-        "%a, %d %b %Y %H:%M:%S %Z", gmtime(&now) );
+    if (strftime(_date, MAX_DATE_LENGTH,
+        "%a, %d %b %Y %H:%M:%S %Z", gmtime(&now) ) == 0)
+            errx(1, "strftime() failed");
     return _date;
 }
 
@@ -774,9 +782,9 @@ static char *rfc1123_date(const time_t when)
  */
 static char *urldecode(const char *url)
 {
-    size_t len = strlen(url);
+    size_t i, len = strlen(url);
     char *out = (char*)xmalloc(len+1);
-    int i, pos;
+    int pos;
 
     for (i=0, pos=0; i<len; i++)
     {
@@ -859,7 +867,7 @@ static void default_reply(struct connection *conn,
  */
 static char *parse_field(const struct connection *conn, const char *field)
 {
-    unsigned int bound1, bound2;
+    size_t bound1, bound2;
     char *pos;
 
     /* find start */
@@ -886,7 +894,7 @@ static char *parse_field(const struct connection *conn, const char *field)
  */
 static void parse_request(struct connection *conn)
 {
-    unsigned int bound1, bound2;
+    size_t bound1, bound2;
     assert(conn->request_length == strlen(conn->request));
 
     /* parse method */
@@ -1061,7 +1069,7 @@ static void poll_recv_request(struct connection *conn)
     ssize_t recvd;
 
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
-    debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, recvd);
+    debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, (int)recvd);
     if (recvd == -1) err(1, "recv()");
     if (recvd == 0)
     {
@@ -1106,7 +1114,7 @@ static void poll_send_header(struct connection *conn)
     sent = send(conn->socket, conn->header + conn->header_sent,
         conn->header_length - conn->header_sent, 0);
     conn->last_active = time(NULL);
-    debugf("poll_send_header(%d) sent %d bytes\n", conn->socket, sent);
+    debugf("poll_send_header(%d) sent %d bytes\n", conn->socket, (int)sent);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
@@ -1154,7 +1162,8 @@ static void poll_send_reply(struct connection *conn)
         /* from file! */
         #define BUFSIZE 65000
         char buf[BUFSIZE];
-        size_t amount = min(BUFSIZE, conn->reply_length - conn->reply_sent);
+        size_t amount = min((size_t)BUFSIZE,
+            conn->reply_length - conn->reply_sent);
         #undef BUFSIZE
 
         if (fseek(conn->reply_file, (long)conn->reply_sent, SEEK_SET) == -1)
@@ -1167,7 +1176,8 @@ static void poll_send_reply(struct connection *conn)
     }
     conn->last_active = time(NULL);
     debugf("poll_send_reply(%d) sent %d bytes [%d to %d]\n",
-        conn->socket, sent, conn->reply_sent, conn->reply_sent+sent-1);
+        conn->socket, (int)sent, (int)conn->reply_sent,
+        (int)conn->reply_sent+sent-1);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
