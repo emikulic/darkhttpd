@@ -106,7 +106,6 @@ struct {                                                                \
                     (elm)->field.le_prev;                               \
         *(elm)->field.le_prev = LIST_NEXT((elm), field);                \
 } while (0)
-
 /* ------------------------------------------------------------------------ */
 
 
@@ -152,15 +151,14 @@ struct connection
 
 
 
-LIST_HEAD(mime_map_head, mime_mapping) mime_map =
-    LIST_HEAD_INITIALIZER(mime_map_head);
-
 struct mime_mapping
 {
-    LIST_ENTRY(mime_mapping) entries;
-
     char *extension, *mimetype;
 };
+
+struct mime_mapping *mime_map = NULL;
+size_t mime_map_size = 0;
+size_t longest_ext = 0;
 
 
 
@@ -179,7 +177,7 @@ struct mime_mapping
 
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
-static uint16_t bindport = 80;
+static u_int16_t bindport = 80;
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 
@@ -394,6 +392,61 @@ static char *make_safe_uri(const char *uri)
 
 
 /* ---------------------------------------------------------------------------
+ * Associates an extension with a mimetype in the mime_map.  Entries are in
+ * unsorted order.  Makes copies of extension and mimetype strings.
+ */
+static void add_mime_mapping(const char *extension, const char *mimetype)
+{
+    size_t i;
+
+    assert(strlen(extension) > 0);
+    assert(strlen(mimetype) > 0);
+    debugf("mapping *.%s    \t-> %s\n", extension, mimetype);
+
+    /* update longest_ext */
+    i = strlen(extension);
+    if (i > longest_ext) longest_ext = i;
+
+    /* look through list and replace an existing entry if possible */
+    for (i=0; i<mime_map_size; i++)
+        if (strcmp(mime_map[i].extension, extension) == 0)
+        {
+            free(mime_map[i].mimetype);
+            mime_map[i].mimetype = xstrdup(mimetype);
+            return;
+        }
+
+    /* no replacement - add a new entry */
+    mime_map_size++;
+    mime_map = (struct mime_mapping *)
+        xrealloc(mime_map, sizeof(struct mime_mapping) * mime_map_size);
+    mime_map[mime_map_size-1].extension = xstrdup(extension);
+    mime_map[mime_map_size-1].mimetype = xstrdup(mimetype);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * qsort() the mime_map.  The map must be sorted before it can be searched
+ * through.
+ */
+static int mime_mapping_cmp(const void *a, const void *b)
+{
+    return strcmp(
+        ((const struct mime_mapping *)a)->extension,
+        ((const struct mime_mapping *)b)->extension
+    );
+}
+
+static void sort_mime_map(void)
+{
+    qsort(mime_map, mime_map_size, sizeof(struct mime_mapping),
+        mime_mapping_cmp);
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Parses a mime.types line and adds the parsed data to the mime_map.
  */
 static void parse_mimetype_line(const char *line)
@@ -417,7 +470,7 @@ static void parse_mimetype_line(const char *line)
     lbound = bound1;
     for (;;)
     {
-        struct mime_mapping *mapping;
+        char *mimetype, *extension;
 
         /* find beginning of extension */
         for (; line[lbound] == ' ' || line[lbound] == '\t'; lbound++);
@@ -430,17 +483,11 @@ static void parse_mimetype_line(const char *line)
             line[rbound] != '\0';
             rbound++);
 
-        mapping = (struct mime_mapping *)
-            xmalloc(sizeof(struct mime_mapping));
-        mapping->mimetype = split_string(line, pad, bound1);
-        mapping->extension = split_string(line, lbound, rbound);
-
-        assert(strlen(mapping->mimetype) > 0);
-        assert(strlen(mapping->extension) > 0);
-
-        debugf("*.%s \t-> %s\n", mapping->extension, mapping->mimetype);
-
-        LIST_INSERT_HEAD(&mime_map, mapping, entries);
+        mimetype = split_string(line, pad, bound1);
+        extension = split_string(line, lbound, rbound);
+        add_mime_mapping(extension, mimetype);
+        free(mimetype);
+        free(extension);
 
         if (line[rbound] == 0) return; /* end of line */
         else lbound = rbound+1;
@@ -512,23 +559,40 @@ static void parse_extension_map_file(const char *filename)
 
 
 /* ---------------------------------------------------------------------------
- * Uses the mime_map to determine a Content-Type: for a requested URI.
+ * Uses the mime_map to determine a Content-Type: for a requested URI.  This
+ * bsearch()es mime_map, so make sure it's sorted first.
  */
+static int mime_mapping_cmp_str(const void *a, const void *b)
+{
+    return strcmp(
+        (const char *)a,
+        ((const struct mime_mapping *)b)->extension
+    );
+}
+
 static const char *uri_content_type(const char *uri)
 {
-    struct mime_mapping *mapping;
-    size_t urilen = strlen(uri);
+    size_t period, urilen = strlen(uri);
 
-    LIST_FOREACH(mapping, &mime_map, entries)
+    for (period=urilen-1;
+        period > 0 && uri[period] != '.' &&
+        (urilen-period-1) <= longest_ext;
+        period--)
+            ;
+
+    if (uri[period] == '.')
     {
-        size_t extlen = strlen(mapping->extension);
-        if (urilen >= extlen+3) /* "/a." + "ext" */
+        struct mime_mapping *result =
+            bsearch((uri+period+1), mime_map, mime_map_size,
+            sizeof(struct mime_mapping), mime_mapping_cmp_str);
+
+        if (result != NULL)
         {
-            if (uri[urilen-1-extlen] == '.' &&
-                strcmp(uri+urilen-extlen, mapping->extension) == 0)
-                    return mapping->mimetype;
+            assert(strcmp(uri+period+1, result->extension) == 0);
+            return result->mimetype;
         }
     }
+    /* else no period found in the string */
     return default_mimetype;
 }
 
@@ -1550,16 +1614,32 @@ static void httpd_poll(void)
 static void exit_quickly(int sig)
 {
     struct connection *conn;
+    int i;
 
-    printf("caught %s, cleaning up...", strsignal(sig)); fflush(stdout);
-    LIST_FOREACH(conn, &connlist, entries)
+    printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
+    /* close connections */
+    conn = LIST_FIRST(&connlist);
+    while (conn != NULL)
     {
+        struct connection *next = LIST_NEXT(conn, entries);
         LIST_REMOVE(conn, entries);
         log_connection(conn);
         free_connection(conn);
+        free(conn);
+        conn = next;
     }
     close(sockin);
     if (logfile != NULL) fclose(logfile);
+
+    /* free mime_map */
+    for (i=0; i<mime_map_size; i++)
+    {
+        free(mime_map[i].extension);
+        free(mime_map[i].mimetype);
+    }
+    free(mime_map);
+   
+    free(wwwroot);
     printf("done!\n");
  
     /* According to: http://www.cons.org/cracauer/sigint.html
@@ -1581,8 +1661,12 @@ static void exit_quickly(int sig)
 int main(int argc, char *argv[])
 {
     printf("%s, %s.\n", pkgname, copyright);
-    parse_commandline(argc, argv);
     parse_default_extension_map();
+    parse_commandline(argc, argv);
+    /* parse_commandline() might override parts of the extension map by
+     * parsing a user-specified file.
+     */
+    sort_mime_map();
     init_sockin();
 
     /* open logfile */
