@@ -18,7 +18,7 @@
  *  . Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
- *  . Detect Content-Type from a list of content types.
+ *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
  *  . Ensure URIs requested are safe.
  */
@@ -124,12 +124,15 @@ static FILE *logfile = NULL;
 static int want_chroot = 0;
 
 static const char *default_extension_map[] = {
-    "audio/mpeg         mp2 mp3 mpga",
-    "image/gif          gif",
-    "image/jpeg         jpeg jpe jpg",
-    "image/png          png",
-    "text/css           css",
+    /* Linear search used - order affects speed significantly.
+     * This could be done in a better way.
+     */
     "text/html          html htm",
+    "image/png          png",
+    "image/jpeg         jpeg jpe jpg",
+    "image/gif          gif",
+    "audio/mpeg         mp2 mp3 mpga",
+    "text/css           css",
     "text/plain         txt asc",
     "text/xml           xml",
     "video/mpeg         mpeg mpe mpg",
@@ -292,6 +295,29 @@ static void parse_extension_map_file(const char *filename)
     }
 
     fclose(fp);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Uses the mime_map to determines a Content-Type: for a requested URI.
+ */
+static const char *uri_content_type(const char *uri)
+{
+    struct mime_mapping *mapping;
+    int urilen = strlen(uri);
+
+    LIST_FOREACH(mapping, &mime_map, entries)
+    {
+        int extlen = strlen(mapping->extension);
+        if (urilen >= extlen+3) /* "/a." + "ext" */
+        {
+            if (uri[urilen-1-extlen] == '.' &&
+                strcmp(uri+urilen-extlen, mapping->extension) == 0)
+                    return mapping->mimetype;
+        }
+    }
+    return default_mimetype;
 }
 
 
@@ -741,6 +767,7 @@ static void parse_request(struct connection *conn)
 static void process_get(struct connection *conn)
 {
     char *decoded_url, *target, *tmp;
+    const char *mimetype = NULL;
     struct stat filestat;
 
     /* work out path of file being requested */
@@ -749,17 +776,19 @@ static void process_get(struct connection *conn)
     if (decoded_url[strlen(decoded_url)-1] == '/')
     {
         asprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
+        mimetype = uri_content_type(index_name);
     }
     else
     {
         asprintf(&target, "%s%s", wwwroot, decoded_url);
+        mimetype = uri_content_type(decoded_url);
     }
     free(decoded_url);
 
     debugf(">>>%s<<<\n", target);
+    free(target);
 
     conn->reply_file = fopen(target, "rb");
-    free(target);
     if (conn->reply_file == NULL)
     {
         /* fopen() failed */
@@ -787,21 +816,26 @@ static void process_get(struct connection *conn)
     conn->reply_length = filestat.st_size;
 
     asprintf(&tmp,
-    "HTTP/1.1 200 OK\r\n"
-    "Date: %s\r\n"
-    "Server: %s\r\n"
-    "Connection: close\r\n"
-    "Content-Length: %d\r\n"
-    "Content-Type: text/plain\r\n" /* FIXME */
-    , rfc1123_date(time(NULL)), pkgname, conn->reply_length
+        "HTTP/1.1 200 OK\r\n"
+        "Date: %s\r\n"
+        "Server: %s\r\n"
+        "Connection: close\r\n"
+        "Content-Length: %d\r\n"
+        "Content-Type: %s\r\n"
+        ,
+        rfc1123_date(time(NULL)), pkgname, conn->reply_length,
+        mimetype
     );
     if (tmp == NULL) errx(1, "out of memory in asprintf()");
 
+    debugf("uri=%s, content-type=%s\n", conn->uri, mimetype);
+
     conn->header_length = asprintf(&(conn->header),
-    "%s"
-    "Last-Modified: %s\r\n"
-    "\r\n"
-    , tmp, rfc1123_date(filestat.st_mtime)
+        "%s"
+        "Last-Modified: %s\r\n"
+        "\r\n"
+        ,
+        tmp, rfc1123_date(filestat.st_mtime)
     );
     free(tmp);
     if (conn->header == NULL) errx(1, "out of memory in asprintf()");
@@ -816,7 +850,6 @@ static void process_get(struct connection *conn)
 static void process_request(struct connection *conn)
 {
     parse_request(conn);
-    debugf("method=``%s'', url=``%s''\n", conn->method, conn->uri);
 
     if      (strcmp(conn->method, "GET") == 0)
         process_get(conn);
@@ -841,11 +874,9 @@ static void process_request(struct connection *conn)
     /* advance state */
     conn->state = SEND_HEADER;
 
-    /* request, method, url not needed anymore */
-    debugf("%s", conn->request);
+    /* request not needed anymore */
     free(conn->request);
     conn->request = NULL;
-    debugf("%s-=-\n", conn->header);
 }
 
 
