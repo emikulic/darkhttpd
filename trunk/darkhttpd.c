@@ -85,7 +85,7 @@ struct connection
     char *reply;
     int reply_dont_free;
     FILE *reply_file;
-    size_t reply_length, reply_sent;
+    size_t reply_start, reply_length, reply_sent;
 
     unsigned int total_sent; /* header + body = total, for logging */
 };
@@ -658,22 +658,27 @@ static struct connection *new_connection(void)
     conn->client = INADDR_ANY;
     conn->last_active = time(NULL);
     conn->request = NULL;
+    conn->request_length = 0;
     conn->method = NULL;
     conn->uri = NULL;
     conn->referer = NULL;
     conn->user_agent = NULL;
-    conn->request_length = 0;
+    conn->range_begin = 0;
+    conn->range_end = 0;
+    conn->range_begin_given = 0;
+    conn->range_end_given = 0;
     conn->header = NULL;
-    conn->header_sent = 0;
     conn->header_length = 0;
+    conn->header_sent = 0;
     conn->header_dont_free = 0;
     conn->header_only = 0;
     conn->http_code = 0;
     conn->reply = NULL;
     conn->reply_dont_free = 0;
     conn->reply_file = NULL;
-    conn->reply_sent = 0;
+    conn->reply_start = 0;
     conn->reply_length = 0;
+    conn->reply_sent = 0;
     conn->total_sent = 0;
 
     /* Make it harmless so it gets garbage-collected if it should, for some
@@ -721,6 +726,7 @@ static void accept_connection(void)
  */
 static void free_connection(struct connection *conn)
 {
+    debugf("free_connection(%d)\n", conn->socket);
     if (conn->socket != -1) close(conn->socket);
     if (conn->request != NULL) free(conn->request);
     if (conn->method != NULL) free(conn->method);
@@ -930,7 +936,7 @@ static void parse_range_field(struct connection *conn)
         for (bound1=bound2;
             isdigit( (int)range[bound2] ) && bound2 < len;
             bound2++)
-                ; /* FIXME */
+                ;
 
         if (bound2 != len && range[bound2] != ',')
             break; /* must be end of string or a list to be valid */
@@ -982,6 +988,8 @@ static void parse_request(struct connection *conn)
     /* parse referer, user_agent */
     conn->referer = parse_field(conn, "Referer: ");
     conn->user_agent = parse_field(conn, "User-Agent: ");
+
+    parse_range_field(conn);
 }
 
 
@@ -1054,7 +1062,6 @@ static void process_get(struct connection *conn)
     }
 
     conn->reply_type = REPLY_FROMFILE;
-    conn->reply_length = filestat.st_size;
     (void) rfc1123_date(lastmod, filestat.st_mtime);
 
     /* check for If-Modified-Since, may not have to send */
@@ -1068,20 +1075,74 @@ static void process_get(struct connection *conn)
         return;
     }
 
-    conn->header_length = xasprintf(&(conn->header),
-        "HTTP/1.1 200 OK\r\n"
-        "Date: %s\r\n"
-        "Server: %s\r\n"
-        "Connection: close\r\n" /* FIXME: remove this for keepalive */
-        "Content-Length: %d\r\n"
-        "Content-Type: %s\r\n"
-        "Last-Modified: %s\r\n"
-        "\r\n"
-        ,
-        rfc1123_date(date, time(NULL)), pkgname, conn->reply_length,
-        mimetype, lastmod
-    );
-    conn->http_code = 200;
+    if (conn->range_begin_given || conn->range_end_given)
+    {
+        size_t from, to;
+
+        if (conn->range_begin_given && conn->range_end_given)
+        {
+            /* 100-200 */
+            from = conn->range_begin;
+            to = conn->range_end;
+
+            /* clamp [to] to filestat.st_size-1 */
+            if (to > (filestat.st_size-1)) to = filestat.st_size-1;
+        }
+        else if (conn->range_begin_given && !conn->range_end_given)
+        {
+            /* 100- :: yields 100 to end */
+            from = conn->range_begin;
+            to = filestat.st_size-1;
+        }
+        else if (!conn->range_begin_given && conn->range_end_given)
+        {
+            /* -200 :: yields last 200 */
+            to = filestat.st_size-1;
+            from = to - conn->range_end + 1;
+
+            /* check for wrapping */
+            if (from < 0 || from > to) from = 0;
+        }
+
+        conn->reply_start = from;
+        conn->reply_length = to - from + 1;
+
+        conn->header_length = xasprintf(&(conn->header),
+            "HTTP/1.1 206 Partial Content\r\n"
+            "Date: %s\r\n"
+            "Server: %s\r\n"
+            "Connection: close\r\n" /* FIXME: remove this for keepalive */
+            "Content-Length: %d\r\n"
+            "Content-Range: bytes %d-%d/%d\r\n"
+            "Content-Type: %s\r\n"
+            "Last-Modified: %s\r\n"
+            "\r\n"
+            ,
+            rfc1123_date(date, time(NULL)), pkgname, conn->reply_length,
+            from, to, filestat.st_size, mimetype, lastmod
+        );
+        conn->http_code = 206;
+        debugf("sending %d-%d/%d\n", from, to, (int)filestat.st_size);
+    }
+    else /* no range stuff */
+    {
+        conn->reply_length = filestat.st_size;
+
+        conn->header_length = xasprintf(&(conn->header),
+            "HTTP/1.1 200 OK\r\n"
+            "Date: %s\r\n"
+            "Server: %s\r\n"
+            "Connection: close\r\n" /* FIXME: remove this for keepalive */
+            "Content-Length: %d\r\n"
+            "Content-Type: %s\r\n"
+            "Last-Modified: %s\r\n"
+            "\r\n"
+            ,
+            rfc1123_date(date, time(NULL)), pkgname, conn->reply_length,
+            mimetype, lastmod
+        );
+        conn->http_code = 200;
+    }
 }
 
 
@@ -1223,7 +1284,8 @@ static void poll_send_reply(struct connection *conn)
 
     if (conn->reply_type == REPLY_GENERATED)
     {
-        sent = send(conn->socket, conn->reply + conn->reply_sent,
+        sent = send(conn->socket,
+            conn->reply + conn->reply_start + conn->reply_sent,
             conn->reply_length - conn->reply_sent, 0);
     }
     else
@@ -1235,18 +1297,36 @@ static void poll_send_reply(struct connection *conn)
             conn->reply_length - conn->reply_sent);
         #undef BUFSIZE
 
-        if (fseek(conn->reply_file, (long)conn->reply_sent, SEEK_SET) == -1)
-            err(1, "fseek(%d)", conn->reply_sent);
+        if (fseek(conn->reply_file,
+            (long)(conn->reply_start + conn->reply_sent), SEEK_SET) == -1)
+            err(1, "fseek(%d)", conn->reply_start + conn->reply_sent);
+
+        debugf("start=%d, sent=%d, length=%d\n",
+            conn->reply_start,
+            conn->reply_sent, conn->reply_length);
 
         if (fread(buf, amount, 1, conn->reply_file) != 1)
-            err(1, "fread()");
-
+        {
+            if (feof(conn->reply_file))
+            {
+                conn->state = DONE;
+                fprintf(stderr, "(%d) premature end of file\n",
+                    conn->socket);
+                return;
+            }
+            
+            fprintf(stderr, "error: %s\n",
+                strerror( ferror(conn->reply_file) ));
+            errx(1, "fread()");
+        }
         sent = send(conn->socket, buf, amount, 0);
     }
     conn->last_active = time(NULL);
-    debugf("poll_send_reply(%d) sent %d bytes [%d to %d]\n",
-        conn->socket, (int)sent, (int)conn->reply_sent,
-        (int)(conn->reply_sent + sent - 1));
+    debugf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
+        conn->socket, (int)sent, conn->reply_start,
+        (int)conn->reply_sent,
+        (int)(conn->reply_sent + sent - 1),
+        conn->reply_length);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
