@@ -303,6 +303,23 @@ static void nonblock_socket(const int sock)
 
 
 /* ---------------------------------------------------------------------------
+ * Enable acceptfilter on the specified socket.  (This is only available on
+ * FreeBSD)
+ */
+static void acceptfilter_socket(const int sock)
+{
+#ifdef __FreeBSD__
+    struct accept_filter_arg filt = {"httpready", ""};
+    if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
+        &filt, sizeof(filt)) == -1)
+        fprintf(stderr, "Cannot enable acceptfilter: %s\n",
+            strerror(errno));
+#endif
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Split string out of src with range [left:right-1]
  */
 static char *split_string(const char *src,
@@ -753,8 +770,6 @@ static void init_sockin(void)
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
 
-    nonblock_socket(sockin);
-
     /* bind socket */
     addrin.sin_family = (u_char)PF_INET;
     addrin.sin_port = htons(bindport);
@@ -769,6 +784,8 @@ static void init_sockin(void)
     /* listen on socket */
     if (listen(sockin, max_connections) == -1)
         err(1, "listen()");
+
+    acceptfilter_socket(sockin);
 }
 
 
