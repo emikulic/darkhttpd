@@ -2,8 +2,8 @@
 # darkhttpd (c) 2003, Emil Mikulic.
 #
 
-CC ?= cc
-CFLAGS ?= -pipe -O2
+CC?=cc
+CFLAGS?=-pipe -O2
 
 TARGETS = bsd linux solaris
 .PHONY: all $(TARGETS)
@@ -23,7 +23,7 @@ solaris:
 	make darkhttpd LIBS=-lxnet
 
 darkhttpd: darkhttpd.c
-	$(CC) $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) $(CFLAGS) $(LIBS) darkhttpd.c -o darkhttpd
 
 clean:
 	rm -f darkhttpd core darkhttpd.core
