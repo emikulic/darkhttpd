@@ -32,6 +32,8 @@ static const char rcsid[]     =
 
 /* Note: Solaris users: link with -lxnet */
 
+#define USE_ACCEPTFILTER
+
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
 #include <sys/sendfile.h>
@@ -57,13 +59,12 @@ static const char rcsid[]     =
 #include <time.h>
 #include <unistd.h>
 
-/* for easy defusal */
-#define debugf printf
-
 #ifdef NDEBUG
-#define safefree free
+ #define safefree free
+ static void debugf(const char *format, ...) { }
 #else
-#define safefree(x) do { free(x); x = NULL; } while(0)
+ #define safefree(x) do { free(x); x = NULL; } while(0)
+ #define debugf printf
 #endif
 
 #ifndef min
@@ -458,12 +459,14 @@ static void nonblock_socket(const int sock)
  */
 static void acceptfilter_socket(const int sock)
 {
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) && defined(USE_ACCEPTFILTER)
     struct accept_filter_arg filt = {"httpready", ""};
     if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
         &filt, sizeof(filt)) == -1)
-        fprintf(stderr, "Cannot enable acceptfilter: %s\n",
+        fprintf(stderr, "cannot enable acceptfilter: %s\n",
             strerror(errno));
+    else
+        printf("enabled acceptfilter\n");
 #endif
 }
 
@@ -877,7 +880,7 @@ static void init_sockin(void)
             sizeof(struct sockaddr)) == -1)
         err(1, "bind(port %u)", bindport);
 
-    debugf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
+    printf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
 
     /* listen on socket */
     if (listen(sockin, max_connections) == -1)
@@ -1925,7 +1928,8 @@ static void poll_recv_request(struct connection *conn)
     debugf("poll_recv_request(%d) got %d bytes\n", conn->socket, (int)recvd);
     if (recvd <= 0)
     {
-        if (recvd == -1) debugf("recv() error: %s\n", strerror(errno));
+        if (recvd == -1)
+            debugf("recv(%d) error: %s\n", conn->socket, strerror(errno));
         conn->conn_close = 1;
         conn->state = DONE;
         return;
@@ -1972,7 +1976,8 @@ static void poll_send_header(struct connection *conn)
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
     {
-        if (sent == -1) debugf("send() error: %s\n", strerror(errno));
+        if (sent == -1)
+            debugf("send(%d) error: %s\n", conn->socket, strerror(errno));
         conn->conn_close = 1;
         conn->state = DONE;
         return;
@@ -2179,7 +2184,7 @@ static void httpd_poll(void)
     }
     #undef MAX_FD_SET
 
-    debugf("select("), fflush(stdout);
+    /* -select- */
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
         (bother_with_timeout) ? &timeout : NULL);
     if (select_ret == 0)
@@ -2190,7 +2195,6 @@ static void httpd_poll(void)
             return;
     }
     if (select_ret == -1) err(1, "select()");
-    debugf(")\n");
 
     /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
@@ -2283,18 +2287,18 @@ int main(int argc, char *argv[])
     if (want_chroot)
     {
         if (chroot(wwwroot) == -1) err(1, "chroot(\"%s\")", wwwroot);
-        debugf("chrooted to `%s'\n", wwwroot);
+        printf("chrooted to `%s'\n", wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
     if (drop_gid != INVALID_GID)
     {
         if (setgid(drop_gid) == -1) err(1, "setgid(%d)", drop_gid);
-        debugf("set gid to %d\n", drop_gid);
+        printf("set gid to %d\n", drop_gid);
     }
     if (drop_uid != INVALID_UID)
     {
         if (setuid(drop_uid) == -1) err(1, "setuid(%d)", drop_uid);
-        debugf("set uid to %d\n", drop_uid);
+        printf("set uid to %d\n", drop_uid);
     }
 
     for (;;) httpd_poll();
