@@ -28,7 +28,7 @@
  * DAMAGE.
  */
 
-static const char pkgname[]   = "darkhttpd/1.0";
+static const char pkgname[]   = "darkhttpd/1.1";
 static const char copyright[] = "copyright (c) 2003 Emil Mikulic";
 static const char rcsid[]     =
     "$Id$";
@@ -329,7 +329,8 @@ static void *xrealloc(void *original, const size_t size)
 
 
 /* ---------------------------------------------------------------------------
- * strdup() that errx()s if it can't allocate.
+ * strdup() that errx()s if it can't allocate.  Do this by hand since strdup()
+ * isn't C89.
  */
 static char *xstrdup(const char *src)
 {
@@ -409,23 +410,28 @@ static struct apbuf *make_apbuf(void)
 
 static void appendl(struct apbuf *buf, const char *s, const size_t len)
 {
-    if (buf->pool <= buf->length + len)
+    if (buf->pool < buf->length + len)
     {
         /* pool has dried up */
-        while (buf->pool <= buf->length + len) buf->pool += APBUF_GROW;
+        while (buf->pool < buf->length + len) buf->pool += APBUF_GROW;
         buf->str = xrealloc(buf->str, buf->pool);
     }
 
-    memcpy(buf->str + buf->length, s, len+1);
+    memcpy(buf->str + buf->length, s, len);
     buf->length += len;
 }
 
 
 
+#ifdef __GNUC__
+#define append(buf, s) appendl(buf, s, \
+    (__builtin_constant_p(s) ? sizeof(s)-1 : strlen(s)) )
+#else
 static void append(struct apbuf *buf, const char *s)
 {
     appendl(buf, s, strlen(s));
 }
+#endif
 
 
 
