@@ -833,10 +833,7 @@ static void parse_commandline(const int argc, char *argv[])
 {
     int i;
 
-    if (
-        (argc < 2) ||
-        (argc == 2 && strcmp(argv[1], "--help") == 0)
-       )
+    if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0))
         usage(); /* no wwwroot given */
 
     wwwroot = argv[1];
@@ -967,7 +964,7 @@ static void accept_connection(void)
 static void log_connection(const struct connection *conn);
 
 /* ---------------------------------------------------------------------------
- * Cleanly deallocate the internals of a struct connection
+ * Log a connection, then cleanly deallocate its internals.
  */
 static void free_connection(struct connection *conn)
 {
@@ -1199,12 +1196,12 @@ static void parse_range_field(struct connection *conn)
     size_t bound1, bound2, len;
     char *range;
 
+    range = parse_field(conn, "Range: bytes=");
+    if (range == NULL) return;
+    len = strlen(range);
+
     do /* break handling */
     {
-        range = parse_field(conn, "Range: bytes=");
-        if (range == NULL) return;
-        len = strlen(range);
-
         /* parse number up to hyphen */
         bound1 = 0;
         for (bound2=0;
@@ -1312,10 +1309,9 @@ static int parse_request(struct connection *conn)
         free(tmp);
     }
 
-    /* parse referer, user_agent */
+    /* parse important fields */
     conn->referer = parse_field(conn, "Referer: ");
     conn->user_agent = parse_field(conn, "User-Agent: ");
-
     parse_range_field(conn);
     return 1;
 }
@@ -1331,9 +1327,6 @@ static void process_get(struct connection *conn)
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
     struct stat filestat;
-
-    /* FIXME */
-    printf("-----\n%s-----\n\n", conn->request);
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->uri);
