@@ -788,8 +788,9 @@ static char *read_line(FILE *fp)
  */
 static void chomp(char *str)
 {
-   size_t pos = strlen(str) - 1;
-   if ((pos >= 0) && (str[pos] == '\n')) str[pos] = '\0';
+   size_t len = strlen(str);
+   if (len == 0) return;
+   if (str[len-1] == '\n') str[len-1] = '\0';
 }
 
 
