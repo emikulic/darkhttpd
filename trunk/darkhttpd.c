@@ -292,8 +292,8 @@ static char *split_string(const char *src,
 {
     char *dest;
     assert(left <= right);
-    assert(left < strlen(src));
-    assert(right < strlen(src));
+    assert(left < strlen(src));   /* [left means must be smaller */
+    assert(right <= strlen(src)); /* right) means can be equal or smaller */
 
     dest = xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
@@ -305,7 +305,7 @@ static char *split_string(const char *src,
 
 /* ---------------------------------------------------------------------------
  * Resolve /./ and /../ in a URI, returing a new, safe URI, or NULL if the URI
- * is invalid/unsafe.
+ * is invalid/unsafe.  Returned buffer needs to be deallocated.
  */
 static char *make_safe_uri(const char *uri)
 {
@@ -337,9 +337,9 @@ static char *make_safe_uri(const char *uri)
         for (j=i+1; j < urilen && uri[j] != '/'; j++)
             ;
 
-        /* FIXME: test this whole function */
+        if (j <= urilen)
+            elements[elem++] = split_string(uri, i, j);
 
-        elements[elem++] = split_string(uri, i, j);
         i = j; /* iterate */
     }
 
@@ -375,23 +375,86 @@ static char *make_safe_uri(const char *uri)
         }
     }
 
-    /* reassemble */
-    out = xmalloc(urilen+1);
-    out[0] = '\0';
-    
-    for (i=0; i<reasm; i++)
+    if (reasm == 0)
     {
-        strcat(out, "/");
-        strcat(out, reassembly[i]);
+        out = xstrdup("/");
+    }
+    else
+    {
+        /* reassemble */
+        out = xmalloc(urilen+1); /* it won't expand */
+        out[0] = '\0';
+        
+        for (i=0; i<reasm; i++)
+        {
+            strcat(out, "/");
+            strcat(out, reassembly[i]);
+        }
+        
+        if (uri[urilen-1] == '/') strcat(out, "/");
+
+        out = xrealloc(out, strlen(out)+1); /* shorten buffer */
     }
 
-    out = xrealloc(out, strlen(out)+1); /* shorten buffer */
     debugf("`%s' -safe-> `%s'\n", uri, out);
     for (j=0; j<elem; j++)
         if (elements[j] != NULL) free(elements[j]);
     free(elements);
     free(reassembly);
     return out;
+}
+
+
+
+/* Unit test for make_safe_uri() */
+static void test_make_safe_uri(void)
+{
+    char *tmp;
+    #define SAFE(from,to) do { \
+        tmp = make_safe_uri(from); if (strcmp(tmp, to) != 0) \
+        debugf("FAIL: `%s' -> `%s', expecting `%s'\n", from, tmp, to); \
+        free(tmp); } while(0)
+
+    SAFE("/", "/");
+    SAFE("//", "/");
+    SAFE("///", "/");
+    SAFE("/moo", "/moo");
+    SAFE("//moo", "/moo");
+    SAFE("/moo/", "/moo/");
+    SAFE("/moo//", "/moo/");
+    SAFE("/moo///", "/moo/");
+    SAFE("/.", "/");
+    SAFE("/./", "/");
+    SAFE("//./", "/");
+    SAFE("/.//", "/");
+    SAFE("///.///", "/");
+    SAFE("/moo/..", "/");
+    SAFE("/moo/../", "/");
+    SAFE("///moo///..///", "/");
+    SAFE("/foo/bar/..", "/foo");
+    SAFE("/foo/bar/../", "/foo/");
+    SAFE("/foo/bar/../moo", "/foo/moo");
+    SAFE("/foo/bar/../moo/", "/foo/moo/");
+    SAFE("/./moo/./../a/b/c/../.././d/../..", "/");
+    SAFE("/./moo/./../a/b/c/../.././d/../../", "/");
+
+    #undef SAFE
+
+    #define UNSAFE(x) do { \
+        tmp = make_safe_uri(x); if (tmp != NULL) { \
+        debugf("FAIL: `%s' is UNSAFE, not `%s'\n", x, tmp); \
+        free(tmp); } } while(0)
+
+    UNSAFE("/..");
+    UNSAFE("/../");
+    UNSAFE("/./..");
+    UNSAFE("/./../");
+    UNSAFE("/foo/../..");
+    UNSAFE("/foo/../../");
+    UNSAFE("/./foo/../../");
+    UNSAFE("/./moo/./../a/b/c/../.././d/../../..");
+
+    #undef UNSAFE
 }
 
 
@@ -1712,6 +1775,9 @@ static void exit_quickly(int sig)
  */
 int main(int argc, char *argv[])
 {
+#ifndef NDEBUG
+    test_make_safe_uri();
+#endif
     printf("%s, %s.\n", pkgname, copyright);
     parse_default_extension_map();
     parse_commandline(argc, argv);
