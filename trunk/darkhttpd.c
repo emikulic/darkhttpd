@@ -22,6 +22,8 @@
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
  *  x Ensure URIs requested are safe.
+ *  . Is expand_tilde() even needed?
+ *  . Import new LIST_macros, use FOREACH
  */
 
 #ifdef __linux
@@ -382,18 +384,27 @@ static char *make_safe_uri(const char *uri)
     else
     {
         /* reassemble */
+        size_t pos = 0;
         out = xmalloc(urilen+1); /* it won't expand */
-        out[0] = '\0';
-        
+
         for (i=0; i<reasm; i++)
         {
-            strcat(out, "/");
-            strcat(out, reassembly[i]);
-        }
-        
-        if (uri[urilen-1] == '/') strcat(out, "/");
+            size_t delta = strlen(reassembly[i]);
 
-        out = xrealloc(out, strlen(out)+1); /* shorten buffer */
+            assert(pos <= urilen);
+            out[pos++] = '/';
+
+            assert(pos+delta <= urilen);
+            memcpy(out+pos, reassembly[i], delta);
+            pos += delta;
+        }
+
+        if (uri[urilen-1] == '/') out[pos++] = '/';
+        assert(pos <= urilen);
+        out[pos] = '\0';
+
+        if (pos != urilen)
+            out = xrealloc(out, strlen(out)+1); /* shorten buffer */
     }
 
     debugf("`%s' -safe-> `%s'\n", uri, out);
