@@ -15,7 +15,7 @@
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
  * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
@@ -1656,7 +1656,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
         if (maxlen < tmp) maxlen = tmp;
     }
 
-    appendf(listing, 
+    appendf(listing,
      "<html><head><title>%s</title></head><body>\n"
      "<h1>%s</h1>\n"
      "<tt><pre>\n",
@@ -1863,7 +1863,7 @@ static void process_get(struct connection *conn)
             mimetype, lastmod
         );
         conn->http_code = 206;
-        debugf("sending %u-%u/%u\n", (unsigned int)from, (unsigned int)to, 
+        debugf("sending %u-%u/%u\n", (unsigned int)from, (unsigned int)to,
             (unsigned int)filestat.st_size);
     }
     else /* no range stuff */
@@ -2071,7 +2071,7 @@ static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
 
-    assert( (conn->reply_type == REPLY_GENERATED && 
+    assert( (conn->reply_type == REPLY_GENERATED &&
         conn->reply_length == strlen(conn->reply)) ||
         conn->reply_type == REPLY_FROMFILE);
 
@@ -2263,7 +2263,7 @@ static void exit_quickly(int sig)
         free(mime_map[i].mimetype);
     }
     free(mime_map);
-    free(keep_alive_field); 
+    free(keep_alive_field);
     printf("done!\n");
     exit(EXIT_SUCCESS);
 }
