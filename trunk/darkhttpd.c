@@ -1,28 +1,11 @@
-/* +----------------------------------------------------------------------- *\
-   | */ static const char pkgname[]   = "darkhttpd/0.1";                    /*
-   | */ static const char copyright[] = "copyright (c) 2003 Emil Mikulic";  /*
-   +----------------------------------------------------------------------- */
-
-/*
- * $Id$
- */
+static const char pkgname[]   = "darkhttpd/0.1";
+static const char copyright[] = "copyright (c) 2003 Emil Mikulic";
+static const char rcsid[]     =
+    "$Id$";
 
 /*
  * TODO:
- *  x Ignore SIGPIPE.
- *  x Actually serve files.
  *  . Generate directory listings.
- *  x Log to file.
- *  x Partial content.
- *  x If-Modified-Since.
- *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
- *  x Keep-alive connections.
- *  x Chroot
- *  x Set{uid|gid}.
- *  . Port to Win32.
- *  x Detect Content-Type from a list of content types.
- *  x Log Referer, User-Agent.
- *  x Ensure URIs requested are safe.
  */
 
 /* Note: Solaris users: link with -lxnet */
@@ -135,8 +118,6 @@ struct {                                                                \
         struct type *le_next;   /* next element */                      \
         struct type **le_prev;  /* address of previous next element */  \
 }
-
-#define LIST_EMPTY(head)        ((head)->lh_first == NULL)
 
 #define LIST_FIRST(head)        ((head)->lh_first)
 
@@ -545,10 +526,8 @@ static char *make_safe_uri(char *uri)
 static void add_mime_mapping(const char *extension, const char *mimetype)
 {
     size_t i;
-
     assert(strlen(extension) > 0);
     assert(strlen(mimetype) > 0);
-    debugf("mapping *.%s    \t-> %s\n", extension, mimetype);
 
     /* update longest_ext */
     i = strlen(extension);
@@ -858,7 +837,6 @@ static void usage(void)
     "\t\tDrops privileges to given uid:gid after initialization.\n"
     "\n",
     bindport, index_name);
-    exit(EXIT_FAILURE);
 }
 
 
@@ -887,7 +865,15 @@ static void parse_commandline(const int argc, char *argv[])
     int i;
 
     if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0))
+    {
         usage(); /* no wwwroot given */
+        exit(EXIT_FAILURE);
+    }
+    if (strcmp(argv[1], "--version") == 0)
+    {
+        printf("%s\n", rcsid);
+        exit(EXIT_FAILURE);
+    }
 
     wwwroot = argv[1];
     /* Strip ending slash. */
