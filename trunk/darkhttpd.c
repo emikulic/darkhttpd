@@ -14,6 +14,8 @@
  *  . Log to file.
  *  . Partial content.
  *  . Keep-alive connections.
+ *  . Chroot, set{uid|gid}.
+ *  . Port to Win32.
  */
 
 #include <sys/types.h>
@@ -81,10 +83,11 @@ struct connection
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
 static u_int16_t bindport = 80;
-static int max_connections = -1; /* kern.ipc.somaxconn */
+static int max_connections = -1;        /* kern.ipc.somaxconn */
+static char *index_name = "index.html";
 
-static int sockin;  /* socket to accept connections from */
-static char *wwwroot = NULL;    /* a path name */
+static int sockin = -1;             /* socket to accept connections from */
+static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static int want_chroot = 0;
 
@@ -150,8 +153,11 @@ static void usage(void)
     "\t--chroot (default: don't chroot)\n"
     "\t\tLocks server into wwwroot directory for added security.\n"
     "\n"
+    "\t--index filename (default: %s)\n" /* index_name */
+    "\t\tDefault file to serve when a directory is requested.\n"
+    "\n"
     /* "\t--uid blah, --gid blah\n" FIXME */
-    , bindport);
+    , bindport, index_name);
     exit(EXIT_FAILURE);
 }
 
@@ -195,6 +201,11 @@ static void parse_commandline(const int argc, char *argv[])
         else if (strcmp(argv[i], "--chroot") == 0)
         {
             want_chroot = 1;
+        }
+        else if (strcmp(argv[i], "--index") == 0)
+        {
+            if (++i >= argc) errx(1, "missing filename after --index");
+            index_name = argv[i];
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -384,7 +395,7 @@ static void parse_request(const char *req, const int length,
     *method = (char*)xmalloc(bound1+1);
     memcpy(*method, req, bound1);
     (*method)[bound1] = 0;
-    strntoupper(method, bound1);
+    strntoupper(*method, bound1);
 
     for (bound2=bound1+1; bound2<length && req[bound2] != ' ' &&
         req[bound2] != '\r'; bound2++);
