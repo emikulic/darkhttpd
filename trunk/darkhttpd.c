@@ -1254,7 +1254,7 @@ static void parse_range_field(struct connection *conn)
  * url (/), the referer (if given) and the user-agent (if given).  Remember to
  * deallocate all these buffers.  The method will be returned in uppercase.
  */
-static void parse_request(struct connection *conn)
+static int parse_request(struct connection *conn)
 {
     size_t bound1, bound2;
     char *tmp;
@@ -1272,6 +1272,8 @@ static void parse_request(struct connection *conn)
     for (; bound1 < conn->request_length &&
         conn->request[bound1] == ' '; bound1++)
             ;
+
+    if (bound1 == conn->request_length) return 0; /* fail */
 
     for (bound2=bound1+1; bound2 < conn->request_length &&
         conn->request[bound2] != ' ' &&
@@ -1312,6 +1314,7 @@ static void parse_request(struct connection *conn)
     conn->user_agent = parse_field(conn, "User-Agent: ");
 
     parse_range_field(conn);
+    return 1;
 }
 
 
@@ -1478,9 +1481,12 @@ static void process_get(struct connection *conn)
  */
 static void process_request(struct connection *conn)
 {
-    parse_request(conn);
-
-    if      (strcmp(conn->method, "GET") == 0)
+    if (!parse_request(conn))
+    {
+        default_reply(conn, 400, "Bad Request",
+            "You sent a request that the server couldn't understand.");
+    }
+    else if (strcmp(conn->method, "GET") == 0)
     {
         process_get(conn);
     }
