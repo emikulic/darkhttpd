@@ -22,7 +22,6 @@
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
  *  x Ensure URIs requested are safe.
- *  . Import new LIST_macros, use FOREACH
  */
 
 #ifdef __linux
@@ -58,7 +57,7 @@
 
 
 /* ---------------------------------------------------------------------------
- * LIST_* macros taken from FreeBSD's src/sys/sys/queue.h,v 1.32.2.7
+ * LIST_* macros taken from FreeBSD's src/sys/sys/queue.h,v 1.56
  * Copyright (c) 1991, 1993
  *      The Regents of the University of California.  All rights reserved.
  *
@@ -87,6 +86,11 @@ struct {                                                                \
         for ((var) = LIST_FIRST((head));                                \
             (var);                                                      \
             (var) = LIST_NEXT((var), field))
+
+#define LIST_FOREACH_SAFE(var, head, field, tvar)                       \
+    for ((var) = LIST_FIRST((head));                                    \
+        (var) && ((tvar) = LIST_NEXT((var), field), 1);                 \
+        (var) = (tvar))
 
 #define LIST_INIT(head) do {                                            \
         LIST_FIRST((head)) = NULL;                                      \
@@ -1615,7 +1619,7 @@ static void httpd_poll(void)
 {
     fd_set recv_set, send_set;
     int max_fd, select_ret;
-    struct connection *conn;
+    struct connection *conn, *next;
     int bother_with_timeout = 0;
     struct timeval timeout;
 
@@ -1632,11 +1636,8 @@ static void httpd_poll(void)
 
     MAX_FD_SET(sockin, &recv_set);
 
-    conn = LIST_FIRST(&connlist);
-    while (conn != NULL)
+    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
     {
-        struct connection *next = LIST_NEXT(conn, entries);
-
         poll_check_timeout(conn);
         switch (conn->state)
         {
@@ -1661,8 +1662,6 @@ static void httpd_poll(void)
 
         default: errx(1, "invalid state");
         }
-
-        conn = next;
     }
     #undef MAX_FD_SET
 
@@ -1708,20 +1707,17 @@ static void httpd_poll(void)
  */
 static void exit_quickly(int sig)
 {
-    struct connection *conn;
+    struct connection *conn, *next;
     size_t i;
 
     printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
     /* close and free connections */
-    conn = LIST_FIRST(&connlist);
-    while (conn != NULL)
+    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
     {
-        struct connection *next = LIST_NEXT(conn, entries);
         LIST_REMOVE(conn, entries);
         log_connection(conn);
         free_connection(conn);
         free(conn);
-        conn = next;
     }
     close(sockin);
     if (logfile != NULL) fclose(logfile);
