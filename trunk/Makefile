@@ -3,7 +3,7 @@
 #
 
 CC?=cc
-CFLAGS?=-pipe -O2
+CFLAGS?=-O
 
 TARGETS = bsd linux solaris
 .PHONY: all $(TARGETS)

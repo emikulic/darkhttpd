@@ -16,7 +16,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-static const char pkgname[]   = "darkhttpd/1.1";
+static const char pkgname[]   = "darkhttpd/1.2";
 static const char copyright[] = "copyright (c) 2003, 2004 Emil Mikulic";
 static const char rcsid[]     =
     "$Id$";
@@ -25,7 +25,7 @@ static const char rcsid[]     =
 #define NDEBUG
 static const int debug = 0;
 #else
-static const int debug = 0;
+static const int debug = 1;
 #endif
 
 #ifdef __linux
