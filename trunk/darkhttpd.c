@@ -87,6 +87,18 @@ struct connection
 
 
 
+LIST_HEAD(mime_map_head, mime_mapping) mime_map =
+    LIST_HEAD_INITIALIZER(mime_map_head);
+
+struct mime_mapping
+{
+    LIST_ENTRY(mime_mapping) entries;
+
+    char *extension, *mimetype;
+};
+
+
+
 /* If a connection is idle for IDLETIME seconds or more, it gets closed and
  * removed from the connlist.
  */
@@ -111,6 +123,34 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static int want_chroot = 0;
 
+static const char *default_extension_map[] = {
+    "audio/mpeg         mp2 mp3 mpga",
+    "image/gif          gif",
+    "image/jpeg         jpeg jpe jpg",
+    "image/png          png",
+    "text/css           css",
+    "text/html          html htm",
+    "text/plain         txt asc",
+    "text/xml           xml",
+    "video/mpeg         mpeg mpe mpg",
+    "video/x-msvideo    avi",
+    NULL
+};
+
+static const char default_mimetype[] = "application/octet-stream";
+
+
+
+/* ---------------------------------------------------------------------------
+ * malloc that errx()s if it can't allocate.
+ */
+static void *xmalloc(const size_t size)
+{
+    void *ptr = malloc(size);
+    if (ptr == NULL) errx(1, "can't allocate %u bytes", size);
+    return ptr;
+}
+
 
 
 /* ---------------------------------------------------------------------------
@@ -121,6 +161,86 @@ static void *xrealloc(void *original, const size_t size)
     void *ptr = realloc(original, size);
     if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
     return ptr;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Split string src into dest with range [left:right-1]
+ */
+static void split_string(char **dest, const char *src,
+    const int left, const int right)
+{
+    *dest = (char*) xmalloc(right - left + 1);
+    memcpy(*dest, src+left, right-left);
+    (*dest)[right-left] = '\0';
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Parses a mime.types line and adds the parsed data to the mime_map.
+ */
+static void parse_mimetype_line(const char *line)
+{
+    int pad, bound1, lbound, rbound;
+
+    /* parse mimetype */
+    for (pad=0; line[pad] == ' ' || line[pad] == '\t'; pad++);
+    if (line[pad] == 0 ||   /* empty line */
+        line[pad] == '#')   /* comment */
+        return;
+
+    for (bound1=pad+1;
+        line[bound1] != ' ' &&
+        line[bound1] != '\t';
+        bound1++)
+    {
+        if (line[bound1] == 0) return; /* malformed line */
+    }
+
+    lbound = bound1;
+    for (;;)
+    {
+        struct mime_mapping *mapping;
+
+        /* find beginning of extension */
+        for (; line[lbound] == ' ' || line[lbound] == '\t'; lbound++);
+        if (line[lbound] == 0) return; /* end of line */
+
+        /* find end of extension */
+        for (rbound = lbound;
+            line[rbound] != ' ' &&
+            line[rbound] != '\t' &&
+            line[rbound] != '\0';
+            rbound++);
+
+        mapping = (struct mime_mapping *)
+            xmalloc(sizeof(struct mime_mapping));
+        split_string(&(mapping->mimetype), line, pad, bound1);
+        split_string(&(mapping->extension), line, lbound, rbound);
+
+        assert(strlen(mapping->mimetype) > 0);
+        assert(strlen(mapping->extension) > 0);
+
+        LIST_INSERT_HEAD(&mime_map, mapping, entries);
+
+        if (line[rbound] == 0) return; /* end of line */
+        else lbound = rbound+1;
+    }
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Adds contents of default_extension_map[] to mime_map list.
+ */
+static void parse_default_extension_map(void)
+{
+    int i;
+
+    for (i=0; default_extension_map[i] != NULL; i++)
+    parse_mimetype_line(default_extension_map[i]);
 }
 
 
@@ -290,18 +410,6 @@ static void parse_commandline(const int argc, char *argv[])
         else
             errx(1, "unknown argument `%s'", argv[i]);
     }
-}
-
-
-
-/* ---------------------------------------------------------------------------
- * malloc that errx()s if it can't allocate.
- */
-static void *xmalloc(const size_t size)
-{
-    void *ptr = malloc(size);
-    if (ptr == NULL) errx(1, "can't allocate %u bytes", size);
-    return ptr;
 }
 
 
@@ -531,9 +639,7 @@ static char *parse_field(const struct connection *conn, const char *field)
         bound2 < conn->request_length; bound2++);
 
     /* copy to buffer */
-    buf = (char*) xmalloc(bound2 - bound1 + 1);
-    memcpy(buf, conn->request+bound1, bound2-bound1);
-    buf[bound2-bound1] = 0;
+    split_string(&buf, conn->request, bound1, bound2);
     return buf;
 }
 
@@ -553,9 +659,7 @@ static void parse_request(struct connection *conn)
     for (bound1 = 0; bound1 < conn->request_length &&
         conn->request[bound1] != ' '; bound1++);
 
-    conn->method = (char*)xmalloc(bound1 + 1);
-    memcpy(conn->method, conn->request, bound1);
-    conn->method[bound1] = 0;
+    split_string(&(conn->method), conn->request, 0, bound1);
     strntoupper(conn->method, bound1);
 
     /* parse uri */
@@ -563,9 +667,7 @@ static void parse_request(struct connection *conn)
         conn->request[bound2] != ' ' &&
         conn->request[bound2] != '\r'; bound2++);
 
-    conn->uri = (char*)xmalloc(bound2 - bound1);
-    memcpy(conn->uri, conn->request + bound1 + 1, bound2 - bound1 - 1);
-    conn->uri[bound2 - bound1 - 1] = 0;
+    split_string(&(conn->uri), conn->request, bound1+1, bound2);
 
     /* parse referer, user_agent */
     conn->referer = parse_field(conn, "Referer: ");
@@ -835,7 +937,7 @@ static void log_connection(const struct connection *conn)
     if (logfile == NULL) return;
 
     /* Separated by tabs:
-     * time client method uri http_code bytes_sent "referer" "user-agent"
+     * time client_ip method uri http_code bytes_sent "referer" "user-agent"
      */
 
     inaddr.s_addr = conn->client;
@@ -956,6 +1058,7 @@ int main(int argc, char *argv[])
 {
     printf("%s, %s.\n", pkgname, copyright);
     parse_commandline(argc, argv);
+    parse_default_extension_map();
     init_sockin();
 
     /* open logfile */
