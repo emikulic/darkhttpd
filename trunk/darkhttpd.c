@@ -1837,7 +1837,7 @@ static void process_get(struct connection *conn)
             from = to - conn->range_end + 1;
 
             /* check for wrapping */
-            if (from < 0 || from > to) from = 0;
+            if (from > to) from = 0;
         }
         else errx(1, "internal error - from/to mismatch");
 
