@@ -16,7 +16,7 @@
  *  x Partial content.
  *  x If-Modified-Since.
  *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
- *  . Keep-alive connections.
+ *  x Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
  *  x Detect Content-Type from a list of content types.
@@ -949,12 +949,15 @@ static void accept_connection(void)
 
 
 
+static void log_connection(const struct connection *conn);
+
 /* ---------------------------------------------------------------------------
  * Cleanly deallocate the internals of a struct connection
  */
 static void free_connection(struct connection *conn)
 {
     debugf("free_connection(%d)\n", conn->socket);
+    log_connection(conn);
     if (conn->socket != -1) close(conn->socket);
     if (conn->request != NULL) free(conn->request);
     if (conn->method != NULL) free(conn->method);
@@ -969,21 +972,17 @@ static void free_connection(struct connection *conn)
 
 
 /* ---------------------------------------------------------------------------
- * Turn a finished connection around for HTTP/1.1 Keep-Alive.
+ * Recycle a finished connection for HTTP/1.1 Keep-Alive.
  */
-static void keepalive_connection(struct connection *conn)
+static void recycle_connection(struct connection *conn)
 {
-    debugf("keepalive_connection(%d)\n", conn->socket);
-    if (conn->request != NULL) free(conn->request);
-    if (conn->method != NULL) free(conn->method);
-    if (conn->uri != NULL) free(conn->uri);
-    if (conn->referer != NULL) free(conn->referer);
-    if (conn->user_agent != NULL) free(conn->user_agent);
-    if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
-    if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
-    if (conn->reply_file != NULL) fclose(conn->reply_file);
+    int socket_tmp = conn->socket;
+    debugf("recycle_connection(%d)\n", socket_tmp);
+    conn->socket = -1; /* so free_connection() doesn't close it */
+    free_connection(conn);
+    conn->socket = socket_tmp;
 
-    conn->client = INADDR_ANY;
+    /* don't reset conn->client */
     conn->request = NULL;
     conn->request_length = 0;
     conn->method = NULL;
@@ -1009,7 +1008,7 @@ static void keepalive_connection(struct connection *conn)
     conn->reply_sent = 0;
     conn->total_sent = 0;
 
-    conn->state = RECV_REQUEST; /* ready */
+    conn->state = RECV_REQUEST; /* ready for another */
 }
 
 
@@ -1723,10 +1722,21 @@ static void httpd_poll(void)
 
         case DONE:
             /* clean out stale connections while we're at it */
-            LIST_REMOVE(conn, entries);
-            log_connection(conn);
-            free_connection(conn);
-            free(conn);
+            if (conn->conn_close)
+            {
+                LIST_REMOVE(conn, entries);
+                free_connection(conn);
+                free(conn);
+            }
+            else
+            {
+                recycle_connection(conn);
+                /* FIXME: could this be done smarter?
+                 * (lines stolen from `case RECV_REQUEST')
+                 */
+                MAX_FD_SET(conn->socket, &recv_set);
+                bother_with_timeout = 1;
+            }
             break;
 
         default: errx(1, "invalid state");
@@ -1784,7 +1794,6 @@ static void exit_quickly(int sig)
     LIST_FOREACH_SAFE(conn, &connlist, entries, next)
     {
         LIST_REMOVE(conn, entries);
-        log_connection(conn);
         free_connection(conn);
         free(conn);
     }
