@@ -22,7 +22,6 @@
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
  *  x Ensure URIs requested are safe.
- *  . Is expand_tilde() even needed?
  *  . Import new LIST_macros, use FOREACH
  */
 
@@ -794,33 +793,6 @@ static void usage(void)
 
 
 /* ---------------------------------------------------------------------------
- * Expands a path beginning with a tilde.  The returned string needs to be
- * deallocated.
- */
-static char *expand_tilde(const char *path)
-{
-    const char *home;
-    char *tmp = NULL;
-
-    if (path[0] != '~') return xstrdup(path); /* do nothing */
-
-    home = getenv("HOME");
-    if (home == NULL)
-    {
-        /* no ENV variable, try getpwuid() */
-        struct passwd *pw = getpwuid(getuid());
-        if (pw) home = pw->pw_dir;
-    }
-
-    if (home == NULL) errx(1, "can't expand `~'");
-
-    xasprintf(&tmp, "%s%s", home, path+1);
-    return tmp;
-}
-
-
-
-/* ---------------------------------------------------------------------------
  * Strips the ending slash from a string (if there is one) and re-allocates
  * the string.
  */
@@ -848,11 +820,8 @@ static void parse_commandline(const int argc, char *argv[])
        )
         usage(); /* no wwwroot given */
 
-#if 0 /* FIXME */
-    wwwroot = expand_tilde( argv[1] ); /* ~/html -> /home/user/html */
-#else
-    wwwroot = xstrdup(argv[1]);
-#endif
+    /*wwwroot = xstrdup(argv[1]); FIXME */
+    wwwroot = argv[1];
     strip_endslash(&wwwroot);
 
     /* walk through the remainder of the arguments (if any) */
@@ -1765,17 +1734,8 @@ static void exit_quickly(int sig)
     }
     free(mime_map);
    
-    free(wwwroot);
+    /*free(wwwroot); FIXME */
     printf("done!\n");
- 
-    /* According to: http://www.cons.org/cracauer/sigint.html
-     * SIGINT and SIGQUIT should be sent to the default handler to ensure the
-     * correct exit codes are used: (FIXME - not appropriate for httpd?)
-
-    if (signal(sig, SIG_DFL) == SIG_ERR) err(1, "signal(SIG_DFL)");
-    if (raise(sig) == -1) err(1, "raise()");
-    
-     */
     exit(EXIT_SUCCESS);
 }
 
