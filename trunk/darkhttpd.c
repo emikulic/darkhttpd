@@ -1245,6 +1245,7 @@ static void parse_range_field(struct connection *conn)
 static void parse_request(struct connection *conn)
 {
     size_t bound1, bound2;
+    char *tmp;
     assert(conn->request_length == strlen(conn->request));
 
     /* parse method */
@@ -1281,17 +1282,17 @@ static void parse_request(struct connection *conn)
                 ;
 
         proto = split_string(conn->request, bound1, bound2);
-        if (strcasecmp(proto, "HTTP/1.1") == 0)
-        {
-            char *tmp = parse_field(conn, "Connection: ");
-            conn->conn_close = 0;
-            if (tmp != NULL)
-            {
-                if (strcasecmp(tmp, "close") == 0) conn->conn_close = 1;
-                free(tmp);
-            }
-        }
+        if (strcasecmp(proto, "HTTP/1.1") == 0) conn->conn_close = 0;
         free(proto);
+    }
+
+    /* parse connection field */
+    tmp = parse_field(conn, "Connection: ");
+    if (tmp != NULL)
+    {
+        if (strcasecmp(tmp, "close") == 0) conn->conn_close = 1;
+        else if (strcasecmp(tmp, "keep-alive") == 0) conn->conn_close = 0;
+        free(tmp);
     }
 
     /* parse referer, user_agent */
