@@ -143,7 +143,7 @@ struct connection
 
     char *header;
     size_t header_length, header_sent;
-    int header_dont_free, header_only, http_code;
+    int header_dont_free, header_only, http_code, conn_close;
 
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
     char *reply;
@@ -900,6 +900,7 @@ static struct connection *new_connection(void)
     conn->header_dont_free = 0;
     conn->header_only = 0;
     conn->http_code = 0;
+    conn->conn_close = 1;
     conn->reply = NULL;
     conn->reply_dont_free = 0;
     conn->reply_file = NULL;
@@ -963,6 +964,52 @@ static void free_connection(struct connection *conn)
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_file != NULL) fclose(conn->reply_file);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Turn a finished connection around for HTTP/1.1 Keep-Alive.
+ */
+static void keepalive_connection(struct connection *conn)
+{
+    debugf("keepalive_connection(%d)\n", conn->socket);
+    if (conn->request != NULL) free(conn->request);
+    if (conn->method != NULL) free(conn->method);
+    if (conn->uri != NULL) free(conn->uri);
+    if (conn->referer != NULL) free(conn->referer);
+    if (conn->user_agent != NULL) free(conn->user_agent);
+    if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
+    if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
+    if (conn->reply_file != NULL) fclose(conn->reply_file);
+
+    conn->client = INADDR_ANY;
+    conn->request = NULL;
+    conn->request_length = 0;
+    conn->method = NULL;
+    conn->uri = NULL;
+    conn->referer = NULL;
+    conn->user_agent = NULL;
+    conn->range_begin = 0;
+    conn->range_end = 0;
+    conn->range_begin_given = 0;
+    conn->range_end_given = 0;
+    conn->header = NULL;
+    conn->header_length = 0;
+    conn->header_sent = 0;
+    conn->header_dont_free = 0;
+    conn->header_only = 0;
+    conn->http_code = 0;
+    conn->conn_close = 1;
+    conn->reply = NULL;
+    conn->reply_dont_free = 0;
+    conn->reply_file = NULL;
+    conn->reply_start = 0;
+    conn->reply_length = 0;
+    conn->reply_sent = 0;
+    conn->total_sent = 0;
+
+    conn->state = RECV_REQUEST; /* ready */
 }
 
 
@@ -1084,11 +1131,13 @@ static void default_reply(struct connection *conn,
      "HTTP/1.1 %d %s\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
-     "Connection: close\r\n" /* FIXME: remove for keepalive */
+     "%s" /* conn_close */
      "Content-Length: %d\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
-     errcode, errname, date, pkgname, conn->reply_length);
+     errcode, errname, date, pkgname,
+     (conn->conn_close ? "Connection: close\r\n" : ""),
+     conn->reply_length);
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = errcode;
@@ -1201,17 +1250,50 @@ static void parse_request(struct connection *conn)
 
     /* parse method */
     for (bound1 = 0; bound1 < conn->request_length &&
-        conn->request[bound1] != ' '; bound1++);
+        conn->request[bound1] != ' '; bound1++)
+            ;
 
     conn->method = split_string(conn->request, 0, bound1);
     strntoupper(conn->method, bound1);
 
     /* parse uri */
+    for (; bound1 < conn->request_length &&
+        conn->request[bound1] == ' '; bound1++)
+            ;
+
     for (bound2=bound1+1; bound2 < conn->request_length &&
         conn->request[bound2] != ' ' &&
-        conn->request[bound2] != '\r'; bound2++);
+        conn->request[bound2] != '\r'; bound2++)
+            ;
 
-    conn->uri = split_string(conn->request, bound1+1, bound2);
+    conn->uri = split_string(conn->request, bound1, bound2);
+
+    /* parse protocol to determine conn_close */
+    if (conn->request[bound2] == ' ')
+    {
+        char *proto;
+        for (bound1 = bound2; bound1 < conn->request_length &&
+            conn->request[bound1] == ' '; bound1++)
+                ;
+
+        for (bound2=bound1+1; bound2 < conn->request_length &&
+            conn->request[bound2] != ' ' &&
+            conn->request[bound2] != '\r'; bound2++)
+                ;
+
+        proto = split_string(conn->request, bound1, bound2);
+        if (strcasecmp(proto, "HTTP/1.1") == 0)
+        {
+            char *tmp = parse_field(conn, "Connection: ");
+            conn->conn_close = 0;
+            if (tmp != NULL)
+            {
+                if (strcasecmp(tmp, "close") == 0) conn->conn_close = 1;
+                free(tmp);
+            }
+        }
+        free(proto);
+    }
 
     /* parse referer, user_agent */
     conn->referer = parse_field(conn, "Referer: ");
@@ -1341,14 +1423,16 @@ static void process_get(struct connection *conn)
             "HTTP/1.1 206 Partial Content\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
-            "Connection: close\r\n" /* FIXME: remove this for keepalive */
+            "%s" /* conn_close */
             "Content-Length: %d\r\n"
             "Content-Range: bytes %d-%d/%d\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname, conn->reply_length,
+            rfc1123_date(date, time(NULL)), pkgname,
+            (conn->conn_close ? "Connection: close\r\n" : ""),
+            conn->reply_length,
             from, to, filestat.st_size, mimetype, lastmod
         );
         conn->http_code = 206;
@@ -1363,14 +1447,15 @@ static void process_get(struct connection *conn)
             "HTTP/1.1 200 OK\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
-            "Connection: close\r\n" /* FIXME: remove this for keepalive */
+            "%s" /* conn_close */
             "Content-Length: %d\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname, conn->reply_length,
-            mimetype, lastmod
+            rfc1123_date(date, time(NULL)), pkgname,
+            (conn->conn_close ? "Connection: close\r\n" : ""),
+            conn->reply_length, mimetype, lastmod
         );
         conn->http_code = 200;
     }
