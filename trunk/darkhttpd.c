@@ -28,6 +28,7 @@
 
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
+#include <sys/sendfile.h>
 #endif
 
 #include <sys/types.h>
@@ -1684,6 +1685,9 @@ static ssize_t send_from_file(int s, FILE *fp, long ofs, size_t size)
     }
     else return size;
 #else
+#ifdef __linux
+    return sendfile(s, fileno(fp), &ofs, size);
+#else
     #define BUFSIZE 20000
     char buf[BUFSIZE];
     size_t amount = min((size_t)BUFSIZE, size);
@@ -1692,6 +1696,7 @@ static ssize_t send_from_file(int s, FILE *fp, long ofs, size_t size)
     if (fseek(fp, ofs, SEEK_SET) == -1) err(1, "fseek(%ld)", ofs);
     if (fread(buf, amount, 1, fp) != 1) return -2;
     return send(s, buf, amount, 0);
+#endif
 #endif
 }
 
