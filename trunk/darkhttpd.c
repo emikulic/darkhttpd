@@ -53,7 +53,7 @@ static const char rcsid[]     =
 
 #ifdef NDEBUG
  #define safefree free
- static void debugf(const char *format, ...) { }
+ #define debugf (void)
 #else
  #define safefree(x) do { free(x); x = NULL; } while(0)
  #define debugf printf
@@ -69,7 +69,7 @@ static const char rcsid[]     =
 
 
 
-#if defined(__FreeBSD__) || defined(__linux)
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
 #include <err.h>
 #else
 /* ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ static void errx(const int code, const char *format, ...)
  *
  * Replacement for the BSD err() which is usually in <err.h>
  */
-void err(const int code, const char *format, ...)
+static void err(const int code, const char *format, ...)
 {
    va_list va;
 
