@@ -12,7 +12,7 @@
  *  . Ignore SIGPIPE.
  *  x Actually serve files.
  *  . Generate directory entries.
- *  . Log to file.
+ *  x Log to file.
  *  . Partial content.
  *  . If-Modified-Since.
  *  . Keep-alive connections.
@@ -26,6 +26,7 @@
 #include <sys/queue.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
@@ -64,15 +65,19 @@ struct connection
     char *request;
     unsigned int request_length;
 
+    char *method, *uri;
+
     char *header;
     unsigned int header_sent, header_length;
-    int header_dont_free, header_only;
+    int header_dont_free, header_only, http_code;
 
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
     char *reply;
     int reply_dont_free;
     FILE *reply_file;
     unsigned int reply_sent, reply_length;
+
+    unsigned int total_sent;
 };
 
 
@@ -93,11 +98,12 @@ struct connection
 static in_addr_t bindaddr = INADDR_ANY;
 static u_int16_t bindport = 80;
 static int max_connections = -1;        /* kern.ipc.somaxconn */
-static char *index_name = "index.html";
+static const char *index_name = "index.html";
 
 static int sockin = -1;             /* socket to accept connections from */
 static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
+static FILE *logfile = NULL;
 static int want_chroot = 0;
 
 
@@ -247,14 +253,17 @@ static struct connection *new_connection(void)
     conn->client = INADDR_ANY;
     conn->last_active = time(NULL);
     conn->request = NULL;
+    conn->method = conn->uri = NULL;
     conn->request_length = 0;
     conn->header = NULL;
     conn->header_sent = conn->header_length = 0;
     conn->header_dont_free = conn->header_only = 0;
+    conn->http_code = 0;
     conn->reply = NULL;
     conn->reply_dont_free = 0;
     conn->reply_file = NULL;
     conn->reply_sent = conn->reply_length = 0;
+    conn->total_sent = 0;
 
     /* Make it harmless so it gets garbage-collected if it should, for some
      * reason, fail to be correctly filled out.
@@ -301,6 +310,8 @@ static void free_connection(struct connection *conn)
 {
     if (conn->socket != -1) close(conn->socket);
     if (conn->request != NULL) free(conn->request);
+    if (conn->method != NULL) free(conn->method);
+    if (conn->uri != NULL) free(conn->uri);
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_file != NULL) fclose(conn->reply_file);
@@ -411,6 +422,7 @@ static void default_reply(struct connection *conn,
     va_start(va, format);
     vasprintf(&reason, format, va);
     va_end(va);
+    if (reason == NULL) errx(1, "out of memory in vasprintf()");
 
     conn->reply_length = asprintf(&(conn->reply),
     "<html><head><title>%d %s</title></head><body>\n"
@@ -421,7 +433,6 @@ static void default_reply(struct connection *conn,
     "</body></html>\n",
     errcode, errname, errname, reason, pkgname, rfc1123_date(time(NULL)));
     free(reason);
-
     if (conn->reply == NULL) errx(1, "out of memory in asprintf()");
 
     conn->header_length = asprintf(&(conn->header),
@@ -433,9 +444,10 @@ static void default_reply(struct connection *conn,
     "Content-Type: text/html\r\n"
     "\r\n",
     errcode, errname, rfc1123_date(time(NULL)), pkgname, conn->reply_length);
-
     if (conn->header == NULL) errx(1, "out of memory in asprintf()");
+
     conn->reply_type = REPLY_GENERATED;
+    conn->http_code = errcode;
 }
 
 
@@ -444,24 +456,27 @@ static void default_reply(struct connection *conn,
  * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET) and the
  * url (/).  Remember to deallocate the method and url buffers.
  */
-static void parse_request(const char *req, const int length,
-    char **method, char **url)
+static void parse_request(struct connection *conn)
 {
-    int bound1, bound2;
+    unsigned int bound1, bound2;
 
-    for (bound1=0; bound1<length && req[bound1] != ' '; bound1++);
+    assert(conn->request_length == strlen(conn->request));
 
-    *method = (char*)xmalloc(bound1+1);
-    memcpy(*method, req, bound1);
-    (*method)[bound1] = 0;
-    strntoupper(*method, bound1);
+    for (bound1 = 0; bound1 < conn->request_length &&
+        conn->request[bound1] != ' '; bound1++);
 
-    for (bound2=bound1+1; bound2<length && req[bound2] != ' ' &&
-        req[bound2] != '\r'; bound2++);
+    conn->method = (char*)xmalloc(bound1 + 1);
+    memcpy(conn->method, conn->request, bound1);
+    conn->method[bound1] = 0;
+    strntoupper(conn->method, bound1);
 
-    *url = (char*)xmalloc(bound2-bound1);
-    memcpy(*url, req+bound1+1, bound2-bound1-1);
-    (*url)[bound2-bound1-1] = 0;
+    for (bound2=bound1+1; bound2 < conn->request_length &&
+        conn->request[bound2] != ' ' &&
+        conn->request[bound2] != '\r'; bound2++);
+
+    conn->uri = (char*)xmalloc(bound2 - bound1);
+    memcpy(conn->uri, conn->request + bound1 + 1, bound2 - bound1 - 1);
+    conn->uri[bound2 - bound1 - 1] = 0;
 }
 
 
@@ -469,13 +484,13 @@ static void parse_request(const char *req, const int length,
 /* ---------------------------------------------------------------------------
  * Process a GET/HEAD request
  */
-static void process_get(struct connection *conn, const char *url)
+static void process_get(struct connection *conn)
 {
     char *decoded_url, *target, *tmp;
     struct stat filestat;
 
     /* work out path of file being requested */
-    decoded_url = urldecode(url);
+    decoded_url = urldecode(conn->uri);
     /* FIXME: ensure this is a safe URL, i.e. no '../' */
     if (decoded_url[strlen(decoded_url)-1] == '/')
     {
@@ -496,12 +511,12 @@ static void process_get(struct connection *conn, const char *url)
         /* fopen() failed */
         if (errno == ENOENT)
             default_reply(conn, 404, "Not Found",
-                "The URI you requested (%s) was not found.", url);
+                "The URI you requested (%s) was not found.", conn->uri);
         else
             default_reply(conn, 403, "Forbidden",
                 "The URI you requested (%s) cannot be returned.<br>\n"
                 "%s.", /* reason why */
-                url, strerror(errno));
+                conn->uri, strerror(errno));
 
         return;
     }
@@ -526,6 +541,7 @@ static void process_get(struct connection *conn, const char *url)
     "Content-Type: text/plain\r\n" /* FIXME */
     , rfc1123_date(time(NULL)), pkgname, conn->reply_length
     );
+    if (tmp == NULL) errx(1, "out of memory in asprintf()");
 
     conn->header_length = asprintf(&(conn->header),
     "%s"
@@ -534,6 +550,8 @@ static void process_get(struct connection *conn, const char *url)
     , tmp, rfc1123_date(filestat.st_mtime)
     );
     free(tmp);
+    if (conn->header == NULL) errx(1, "out of memory in asprintf()");
+    conn->http_code = 200;
 }
 
 
@@ -543,28 +561,28 @@ static void process_get(struct connection *conn, const char *url)
  */
 static void process_request(struct connection *conn)
 {
-    char *method, *url;
-    parse_request(conn->request, conn->request_length, &method, &url);
-    debugf("method=``%s'', url=``%s''\n", method, url);
+    parse_request(conn);
+    debugf("method=``%s'', url=``%s''\n", conn->method, conn->uri);
 
-    if      (strcmp(method, "GET") == 0)
-        process_get(conn, url);
-    else if (strcmp(method, "HEAD") == 0)
+    if      (strcmp(conn->method, "GET") == 0)
+        process_get(conn);
+    else if (strcmp(conn->method, "HEAD") == 0)
     {
-        process_get(conn, url);
+        process_get(conn);
         conn->header_only = 1;
     }
-    else if (strcmp(method, "OPTIONS") == 0 ||
-             strcmp(method, "POST") == 0 ||
-             strcmp(method, "PUT") == 0 ||
-             strcmp(method, "DELETE") == 0 ||
-             strcmp(method, "TRACE") == 0 ||
-             strcmp(method, "CONNECT") == 0)
+    else if (strcmp(conn->method, "OPTIONS") == 0 ||
+             strcmp(conn->method, "POST") == 0 ||
+             strcmp(conn->method, "PUT") == 0 ||
+             strcmp(conn->method, "DELETE") == 0 ||
+             strcmp(conn->method, "TRACE") == 0 ||
+             strcmp(conn->method, "CONNECT") == 0)
         default_reply(conn, 501, "Not Implemented",
-            "That method you specified (%s) is not implemented.", method);
+            "The method you specified (%s) is not implemented.",
+            conn->method);
     else
         default_reply(conn, 400, "Bad Request",
-            "%s is not a valid HTTP/1.1 method.", method);
+            "%s is not a valid HTTP/1.1 method.", conn->method);
 
     /* advance state */
     conn->state = SEND_HEADER;
@@ -574,9 +592,6 @@ static void process_request(struct connection *conn)
     free(conn->request);
     conn->request = NULL;
     debugf("%s-=-\n", conn->header);
-
-    free(method);
-    free(url);
 }
 
 
@@ -628,7 +643,11 @@ static void poll_recv_request(struct connection *conn)
  */
 static void poll_send_header(struct connection *conn)
 {
-    ssize_t sent = send(conn->socket, conn->header + conn->header_sent,
+    ssize_t sent;
+
+    assert(conn->header_length == strlen(conn->header));
+
+    sent = send(conn->socket, conn->header + conn->header_sent,
         conn->header_length - conn->header_sent, 0);
     if (sent == -1) err(1, "send()");
     if (sent == 0)
@@ -637,6 +656,7 @@ static void poll_send_header(struct connection *conn)
         return;
     }
     conn->header_sent += (unsigned int)sent;
+    conn->total_sent += (unsigned int)sent;
 
     /* check if we're done sending */
     if (conn->header_sent == conn->header_length)
@@ -659,6 +679,11 @@ static void poll_send_header(struct connection *conn)
 static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
+
+    assert( (conn->reply_type == REPLY_GENERATED && 
+        conn->reply_length == strlen(conn->reply)) ||
+        conn->reply_type == REPLY_FROMFILE);
+
     if (conn->reply_type == REPLY_GENERATED)
     {
         sent = send(conn->socket, conn->reply + conn->reply_sent,
@@ -689,6 +714,7 @@ static void poll_send_reply(struct connection *conn)
         return;
     }
     conn->reply_sent += (unsigned int)sent;
+    conn->total_sent += (unsigned int)sent;
 
     /* check if we're done sending */
     if (conn->reply_sent == conn->reply_length)
@@ -706,8 +732,34 @@ static void poll_send_reply(struct connection *conn)
 
 
 /* ---------------------------------------------------------------------------
+ * Add a connection's details to the logfile.
+ */
+static void log_connection(const struct connection *conn)
+{
+    struct in_addr inaddr;
+
+    assert(conn->http_code != 0);
+    if (logfile == NULL) return;
+
+    /* Separated by tabs:
+     * time client method uri http_code bytes_sent
+     */
+
+    /* FIXME: Referer, User-Agent */
+
+    inaddr.s_addr = conn->client;
+
+    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\n",
+        time(NULL), inet_ntoa(inaddr), conn->method, conn->uri,
+        conn->http_code, conn->total_sent);
+    fflush(logfile);
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Main loop of the httpd - a select() and then delegation to accept
- * connections, handle receiving of requests and sending of replies.
+ * connections, handle receiving of requests, and sending of replies.
  */
 static void httpd_poll(void)
 {
@@ -742,6 +794,7 @@ static void httpd_poll(void)
         case DONE:
             /* clean out stale connections while we're at it */
             LIST_REMOVE(conn, entries);
+            log_connection(conn);
             free_connection(conn);
             free(conn);
             break;
@@ -789,6 +842,13 @@ int main(int argc, char *argv[])
     printf("%s, %s.\n", pkgname, copyright);
     parse_commandline(argc, argv);
     init_sockin();
+
+    /* open logfile */
+    if (logfile_name != NULL)
+    {
+        logfile = fopen(logfile_name, "wb");
+        if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
+    }
 
     for (;;) httpd_poll();
 
