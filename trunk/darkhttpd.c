@@ -261,6 +261,8 @@ static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static int want_chroot = 0, want_accf = 0;
+static uint32_t num_requests = 0;
+static uint64_t total_in = 0, total_out = 0;
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -1915,6 +1917,7 @@ static void process_get(struct connection *conn)
  */
 static void process_request(struct connection *conn)
 {
+    num_requests++;
     if (!parse_request(conn))
     {
         default_reply(conn, 400, "Bad Request",
@@ -1983,6 +1986,7 @@ static void poll_recv_request(struct connection *conn)
     memcpy(conn->request+conn->request_length, buf, (size_t)recvd);
     conn->request_length += recvd;
     conn->request[conn->request_length] = 0;
+    total_in += recvd;
 
     /* process request if we have all of it */
     if (conn->request_length > 4 &&
@@ -2023,8 +2027,9 @@ static void poll_send_header(struct connection *conn)
         conn->state = DONE;
         return;
     }
-    conn->header_sent += (unsigned int)sent;
-    conn->total_sent += (unsigned int)sent;
+    conn->header_sent += sent;
+    conn->total_sent += sent;
+    total_out += sent;
 
     /* check if we're done sending */
     if (conn->header_sent == conn->header_length)
@@ -2124,6 +2129,7 @@ static void poll_send_reply(struct connection *conn)
     }
     conn->reply_sent += (unsigned int)sent;
     conn->total_sent += (unsigned int)sent;
+    total_out += sent;
 
     /* check if we're done sending */
     if (conn->reply_sent == conn->reply_length) conn->state = DONE;
@@ -2286,13 +2292,14 @@ static void exit_quickly(int sig)
     printf("done!\n");
 
     getrusage(RUSAGE_SELF, &r);
-    printf("CPU time used: %u.%02u user %u.%02u system\n",
+    printf("CPU time used: %u.%02u user, %u.%02u system\n",
         (unsigned int)r.ru_utime.tv_sec,
             (unsigned int)(r.ru_utime.tv_usec/10000),
         (unsigned int)r.ru_stime.tv_sec,
             (unsigned int)(r.ru_stime.tv_usec/10000)
     );
-
+    printf("Requests: %u\n", num_requests);
+    printf("Bytes: %llu in, %llu out\n", total_in, total_out);
     exit(EXIT_SUCCESS);
 }
 
