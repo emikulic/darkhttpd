@@ -911,39 +911,48 @@ static void init_sockin(void)
  */
 static void usage(void)
 {
-    printf("\n  usage: darkhttpd /path/to/wwwroot [options]\n\n"
-    "options:\n\n"
+    printf("\n"
+    "usage: darkhttpd /path/to/wwwroot [options]\n\n"
+    "options:\n\n");
+    printf(
     "\t--port number (default: %u)\n" /* bindport */
     "\t\tSpecifies which port to listen on for connections.\n"
-    "\n"
+    "\n", bindport);
+    printf(
     "\t--addr ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
     "\t\twhich one to bind the listening port to.\n"
-    "\n"
+    "\n");
+    printf(
     "\t--maxconn number (default: system maximum)\n"
     "\t\tSpecifies how many concurrent connections to accept.\n"
-    "\n"
+    "\n");
+    printf(
     "\t--log filename (default: no logging)\n"
     "\t\tSpecifies which file to append the request log to.\n"
-    "\n"
+    "\n");
+    printf(
     "\t--chroot (default: don't chroot)\n"
     "\t\tLocks server into wwwroot directory for added security.\n"
-    "\n"
+    "\n");
+    printf(
     "\t--index filename (default: %s)\n" /* index_name */
     "\t\tDefault file to serve when a directory is requested.\n"
-    "\n"
+    "\n", index_name);
+    printf(
     "\t--mimetypes filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n"
-    "\n"
+    "\n");
+    printf(
     "\t--uid uid, --gid gid\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n"
+    "\n");
 #ifdef __FreeBSD__
-    "\n"
+    printf(
     "\t--accf\n"
     "\t\tUse acceptfilter.\n"
+    "\n");
 #endif
-    "\n",
-    bindport, index_name);
 }
 
 
@@ -2083,10 +2092,6 @@ static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
 
-    assert( (conn->reply_type == REPLY_GENERATED &&
-        conn->reply_length == strlen(conn->reply)) ||
-        conn->reply_type == REPLY_FROMFILE);
-
     if (conn->reply_type == REPLY_GENERATED)
     {
         sent = send(conn->socket,
@@ -2280,9 +2285,11 @@ static void exit_quickly(int sig)
     printf("done!\n");
 
     getrusage(RUSAGE_SELF, &r);
-    printf("CPU time used: %d.%06d user %d.%06d system\n",
-        r.ru_utime.tv_sec, r.ru_utime.tv_usec,
-        r.ru_stime.tv_sec, r.ru_stime.tv_usec
+    printf("CPU time used: %u.%02u user %u.%02u system\n",
+        (unsigned int)r.ru_utime.tv_sec,
+            (unsigned int)(r.ru_utime.tv_usec/10000),
+        (unsigned int)r.ru_stime.tv_sec,
+            (unsigned int)(r.ru_stime.tv_usec/10000)
     );
 
     exit(EXIT_SUCCESS);
