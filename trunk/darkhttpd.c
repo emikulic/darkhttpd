@@ -18,6 +18,9 @@
  *  . Keep-alive connections.
  *  . Chroot, set{uid|gid}.
  *  . Port to Win32.
+ *  . Content-Type
+ *  . Log Referer, User-Agent
+ *  . Ensure URIs requested are safe
  */
 
 #include <sys/types.h>
@@ -320,7 +323,7 @@ static void free_connection(struct connection *conn)
 
 
 /* ---------------------------------------------------------------------------
- * realloc that errx()s if it can't allocate.
+ * realloc() that errx()s if it can't allocate.
  */
 static void *xrealloc(void *original, const size_t size)
 {
@@ -455,14 +458,15 @@ static void default_reply(struct connection *conn,
 
 /* ---------------------------------------------------------------------------
  * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET) and the
- * url (/).  Remember to deallocate the method and url buffers.
+ * url (/).  Remember to deallocate the method and url buffers.  The method
+ * will be returned in uppercase.
  */
 static void parse_request(struct connection *conn)
 {
     unsigned int bound1, bound2;
-
     assert(conn->request_length == strlen(conn->request));
 
+    /* parse method */
     for (bound1 = 0; bound1 < conn->request_length &&
         conn->request[bound1] != ' '; bound1++);
 
@@ -471,6 +475,7 @@ static void parse_request(struct connection *conn)
     conn->method[bound1] = 0;
     strntoupper(conn->method, bound1);
 
+    /* parse uri */
     for (bound2=bound1+1; bound2 < conn->request_length &&
         conn->request[bound2] != ' ' &&
         conn->request[bound2] != '\r'; bound2++);
