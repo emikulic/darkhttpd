@@ -301,6 +301,21 @@ static void poll_check_timeout(struct connection *conn)
 
 
 /* ---------------------------------------------------------------------------
+ * Build an RFC1123 date in the static buffer _date[] and return it.
+ */
+#define MAX_DATE_LENGTH 29 /* strlen("Fri, 28 Feb 2003 00:02:08 GMT") */
+static char _date[MAX_DATE_LENGTH + 1];
+static char *rfc1123_date(void)
+{
+    time_t now = time(NULL);
+    strftime(_date, MAX_DATE_LENGTH,
+        "%a, %d %b %Y %H:%M:%S %Z", gmtime(&now) );
+    return _date;
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * A default reply for any occasion.
  */
 static void default_reply(struct connection *conn,
@@ -317,16 +332,28 @@ static void default_reply(struct connection *conn,
 
     conn->header_length = asprintf(&(conn->header),
     "HTTP/1.1 %d %s\r\n"
-    /* FIXME: Date */
+    "Date: %s\r\n"
     "Server: %s\r\n"
     "Connection: close\r\n"
     "Content-Length: %d\r\n"
     "Content-Type: text/html\r\n"
     "\r\n",
-    errcode, errname, pkgname, conn->reply_length);
+    errcode, errname, rfc1123_date(), pkgname, conn->reply_length);
 
     if (conn->header == NULL) errx(1, "out of memory in asprintf()");
     conn->reply_type = REPLY_GENERATED;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Parse "GET / HTTP/1.1" to get the method (GET) and the url (/).
+ * Remember to deallocate the method and url buffers.
+ */
+static void parse_request(const char *req, const int length,
+    char **method, char **url)
+{
+    /* FIXME */
 }
 
 
@@ -336,8 +363,13 @@ static void default_reply(struct connection *conn,
  */
 static void process_request(struct connection *conn)
 {
+    char *method, *url;
+    parse_request(conn->request, conn->request_length, &method, &url);
+
+    /*debugf("method=``%s'', url=``%s''\n", method, url);*/
     debugf("%s", conn->request);
 
+    /* FIXME */
     default_reply(conn, 501, "Not Implemented");
     conn->state = SEND_HEADER;
 
