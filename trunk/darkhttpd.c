@@ -401,17 +401,49 @@ static char *split_string(const char *src,
 
 
 /* ---------------------------------------------------------------------------
+ * Consolidate slashes in-place.
+ */
+static void consolidate_slashes(char *s)
+{
+    size_t left = 0, right = 0;
+    int saw_slash = 0;
+
+    assert(s != NULL);
+
+    while (s[right] != '\0')
+    {
+        if (saw_slash)
+        {
+            if (s[right] == '/') right++;
+            else
+            {
+                saw_slash = 0;
+                s[left++] = s[right++];
+            }
+        }
+        else
+        {
+            if (s[right] == '/') saw_slash++;
+            s[left++] = s[right++];
+        }
+    }
+    s[left] = '\0';
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Resolve /./ and /../ in a URI, returing a new, safe URI, or NULL if the URI
  * is invalid/unsafe.  Returned buffer needs to be deallocated.
  */
-static char *make_safe_uri(const char *uri)
+static char *make_safe_uri(char *uri)
 {
     char **elements, **reassembly, *out;
     unsigned int slashes, elem, reasm, urilen, i, j;
 
     assert(uri != NULL);
-
     if (uri[0] != '/') return NULL;
+    consolidate_slashes(uri);
     urilen = (unsigned int)strlen(uri);
 
     /* count the slashes */
@@ -515,11 +547,10 @@ static char *make_safe_uri(const char *uri)
 /* Unit test for make_safe_uri() */
 static void test_make_safe_uri(void)
 {
-    char *tmp;
-    #define SAFE(from,to) do { \
-        tmp = make_safe_uri(from); if (strcmp(tmp, to) != 0) \
+    #define SAFE(from,to) do { char *uri = xstrdup(from), *tmp;\
+        tmp = make_safe_uri(uri); if (strcmp(tmp, to) != 0) \
         debugf("FAIL: `%s' -> `%s', expecting `%s'\n", from, tmp, to); \
-        free(tmp); } while(0)
+        free(tmp); free(uri); } while(0)
 
     SAFE("/", "/");
     SAFE("//", "/");
@@ -546,10 +577,10 @@ static void test_make_safe_uri(void)
 
     #undef SAFE
 
-    #define UNSAFE(x) do { \
-        tmp = make_safe_uri(x); if (tmp != NULL) { \
+    #define UNSAFE(x) do { char *uri = xstrdup(x), *tmp;\
+        tmp = make_safe_uri(uri); if (tmp != NULL) { \
         debugf("FAIL: `%s' is UNSAFE, not `%s'\n", x, tmp); \
-        free(tmp); } } while(0)
+        free(tmp); }; free(uri); } while(0)
 
     UNSAFE("/..");
     UNSAFE("/../");
