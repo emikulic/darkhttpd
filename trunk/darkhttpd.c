@@ -52,7 +52,11 @@
 /* for easy defusal */
 #define debugf printf
 
+#ifdef NDEBUG
+#define safefree free
+#else
 #define safefree(x) do { free(x); x = NULL; } while(0)
+#endif
 
 #ifndef min
 #define min(a,b) ( ((a)<(b)) ? (a) : (b) )
@@ -1651,7 +1655,8 @@ static void process_request(struct connection *conn)
     conn->state = SEND_HEADER;
 
     /* request not needed anymore */
-    safefree(conn->request);
+    free(conn->request);
+    conn->request = NULL; /* important: don't free it again later */
 }
 
 
