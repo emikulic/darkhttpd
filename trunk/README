@@ -1,0 +1,52 @@
+darkhttpd
+=========
+
+Compiling
+---------
+
+On Solaris:
+	$ cc darkhttpd.c -lxnet -o darkhttpd
+
+Everywhere else:
+	$ cc darkhttpd.c -o darkhttpd
+
+
+
+Running
+-------
+
+Serve /var/www/htdocs on the default port (port 80):
+	$ ./darkhttpd /var/www/htdocs
+
+Serve ~/public_html on port 8081:
+	$ ./darkhttpd ~/public_html --port 8081
+
+Only bind to one IP address (useful on multi-homed systems):
+	$ ./darkhttpd ~/public_html --addr 127.0.0.1
+
+Serve at most 4 simultaneous connections:
+	$ ./darkhttpd ~/public_html --maxconn 4
+
+Log accesses to a file:
+	$ ./darkhttpd ~/public_html --log access.log
+
+Chroot for extra security (you usually have to be root to do this):
+	$ ./darkhttpd /var/www/htdocs --chroot
+
+Use default.htm instead of index.html:
+	$ ./darkhttpd /var/www/htdocs --index default.htm
+
+Add mimetypes - in this case, serve .dat files as text/plain:
+	$ cat extramime
+	# this is a comment
+	text/plain	dat
+	$ ./darkhttpd /var/www/htdocs --mimetypes extramime
+
+Drop privileges:
+	$ ./darkhttpd /var/www/htdocs --uid www --gid www
+
+Use acceptfilter (FreeBSD only):
+	$ kldload accf_http
+	$ ./darkhttpd /var/www/htdocs --accf
+
+Commandline options can be combined.
