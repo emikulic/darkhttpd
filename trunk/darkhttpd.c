@@ -899,7 +899,7 @@ static char *parse_field(const struct connection *conn, const char *field)
  */
 static void parse_range_field(struct connection *conn)
 {
-    int bound1, bound2, len;
+    size_t bound1, bound2, len;
     char *range;
 
     do /* break handling */
@@ -921,7 +921,8 @@ static void parse_range_field(struct connection *conn)
         if (bound1 != bound2)
         {
             conn->range_begin_given = 1;
-            conn->range_begin = atoi(range+bound1);
+            conn->range_begin = (size_t)strtol(range+bound1, NULL, 10);
+
         }
 
         /* parse number after hyphen */
@@ -937,7 +938,7 @@ static void parse_range_field(struct connection *conn)
         if (bound1 != bound2)
         {
             conn->range_end_given = 1;
-            conn->range_end = atoi(range+bound1);
+            conn->range_end = (size_t)strtol(range+bound1, NULL, 10);
         }
     }
     while(0); /* break handling */
@@ -1245,7 +1246,7 @@ static void poll_send_reply(struct connection *conn)
     conn->last_active = time(NULL);
     debugf("poll_send_reply(%d) sent %d bytes [%d to %d]\n",
         conn->socket, (int)sent, (int)conn->reply_sent,
-        (int)conn->reply_sent+sent-1);
+        (int)(conn->reply_sent + sent - 1));
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
