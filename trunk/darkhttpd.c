@@ -24,6 +24,8 @@
  *  x Ensure URIs requested are safe.
  */
 
+/* Note: Solaris users: link with -lxnet */
+
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
 #endif
@@ -35,7 +37,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <ctype.h>
-#include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -52,6 +53,54 @@
 
 #ifndef min
 #define min(a,b) ( ((a)<(b)) ? (a) : (b) )
+#endif
+
+#ifndef INADDR_NONE
+#define INADDR_NONE -1
+#endif
+
+
+
+#if defined(__FreeBSD__) || defined(__linux)
+#include <err.h>
+#else
+/* ---------------------------------------------------------------------------
+ * errx - prints "error: [...]\n" to stderr and exit()s with [code]
+ *
+ * Replacement for the BSD errx() which is usually in <err.h>
+ */
+static void errx(const int code, const char *format, ...)
+{
+   va_list va;
+
+   va_start(va, format);
+   fprintf(stderr, "error: ");
+   vfprintf(stderr, format, va);
+   fprintf(stderr, "\n");
+   va_end(va);
+
+   exit(code);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * err - prints "error: [...]: strerror\n" to stderr and exit()s with [code]
+ *
+ * Replacement for the BSD err() which is usually in <err.h>
+ */
+void err(const int code, const char *format, ...)
+{
+   va_list va;
+
+   va_start(va, format);
+   fprintf(stderr, "error: ");
+   vfprintf(stderr, format, va);
+   fprintf(stderr, ": %s\n", strerror(errno));
+   va_end(va);
+
+   exit(code);
+}
 #endif
 
 
@@ -185,7 +234,7 @@ static char *keep_alive_field = NULL;
 
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
-static u_int16_t bindport = 80;
+static unsigned short bindport = 80;
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 
@@ -259,6 +308,19 @@ static char *xstrdup(const char *src)
     memcpy(dest, src, len);
     return dest;
 }
+
+
+
+#ifdef __sun__ /* unimpressed by Solaris */
+static int vasprintf(char **strp, const char *fmt, va_list ap)
+{
+    char tmp;
+    int result = vsnprintf(&tmp, 1, fmt, ap);
+    *strp = xmalloc(result+1);
+    result = vsnprintf(*strp, result+1, fmt, ap);
+    return result;
+}
+#endif
 
 
 
@@ -846,7 +908,7 @@ static void parse_commandline(const int argc, char *argv[])
         if (strcmp(argv[i], "--port") == 0)
         {
             if (++i >= argc) errx(1, "missing number after --port");
-            bindport = (u_int16_t)atoi(argv[i]);
+            bindport = (unsigned short)atoi(argv[i]);
         }
         else if (strcmp(argv[i], "--addr") == 0)
         {
