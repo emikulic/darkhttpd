@@ -850,10 +850,12 @@ static void default_reply(struct connection *conn,
 
 
 /* ---------------------------------------------------------------------------
- * Parses a single HTTP request field.  If the specified field doesn't exist,
- * returns NULL.  Otherwise, you need to remember to deallocate the result.
+ * Parses a single HTTP request field.  Returns string from end of [field] to
+ * first \r, \n or end of request string.  Returns NULL if [field] can't be
+ * matched.
  *
- * eg. "Referer: moo" with field="Referer: " returns "moo"
+ * You need to remember to deallocate the result.
+ * example: parse_field(conn, "Referer: ");
  */
 static char *parse_field(const struct connection *conn, const char *field)
 {
