@@ -1475,45 +1475,19 @@ static void process_get(struct connection *conn)
     debugf("uri=%s, target=%s, content-type=%s\n",
         conn->uri, target, mimetype);
 
-    /* stat the path - there is a potential race between this and the fopen()
-     * call, but it's better than trying to open a FIFO or a device.
-     */
-    if (stat(target, &filestat) == -1)
-    {
-        if (errno == ENOENT)
-            default_reply(conn, 404, "Not Found",
-                "The URI you requested (%s) was not found.", conn->uri);
-        else
-            default_reply(conn, 500, "Internal Server Error",
-                "stat(%s) failed: %s.", conn->uri, strerror(errno));
-
-        safefree(target);
-        return;
-    }
-
-    /* make sure it's a regular file */
-    if (S_ISDIR(filestat.st_mode))
-    {
-        redirect(conn, "%s/", conn->uri);
-        safefree(target);
-        return;
-    }
-    else if (!S_ISREG(filestat.st_mode))
-    {
-        default_reply(conn, 403, "Forbidden", "Not a regular file.");
-        safefree(target);
-        return;
-    }
-
-    conn->reply_fd = open(target, O_RDONLY);
+    /* open file */
+    conn->reply_fd = open(target, O_RDONLY | O_NONBLOCK);
     safefree(target);
 
     if (conn->reply_fd == -1)
     {
-        /* fopen() failed */
+        /* open() failed */
         if (errno == EACCES)
             default_reply(conn, 403, "Forbidden",
                 "You don't have permission to access (%s).", conn->uri);
+        else if (errno == ENOENT)
+            default_reply(conn, 404, "Not Found",
+                "The URI you requested (%s) was not found.", conn->uri);
         else
             default_reply(conn, 500, "Internal Server Error",
                 "The URI you requested (%s) cannot be returned: %s.",
@@ -1522,11 +1496,23 @@ static void process_get(struct connection *conn)
         return;
     }
 
-    /* get information on the file, again, just in case */
+    /* stat the file */
     if (fstat(conn->reply_fd, &filestat) == -1)
     {
         default_reply(conn, 500, "Internal Server Error",
             "fstat() failed: %s.", strerror(errno));
+        return;
+    }
+
+    /* make sure it's a regular file */
+    if (S_ISDIR(filestat.st_mode))
+    {
+        redirect(conn, "%s/", conn->uri);
+        return;
+    }
+    else if (!S_ISREG(filestat.st_mode))
+    {
+        default_reply(conn, 403, "Forbidden", "Not a regular file.");
         return;
     }
 
