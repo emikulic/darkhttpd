@@ -1477,6 +1477,7 @@ static void process_get(struct connection *conn)
             default_reply(conn, 500, "Internal Server Error",
                 "stat(%s) failed: %s.", conn->uri, strerror(errno));
 
+        safefree(target);
         return;
     }
 
@@ -1484,11 +1485,13 @@ static void process_get(struct connection *conn)
     if (S_ISDIR(filestat.st_mode))
     {
         redirect(conn, "%s/", conn->uri);
+        safefree(target);
         return;
     }
     else if (!S_ISREG(filestat.st_mode))
     {
         default_reply(conn, 403, "Forbidden", "Not a regular file.");
+        safefree(target);
         return;
     }
 
