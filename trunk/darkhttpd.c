@@ -14,8 +14,30 @@
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
+struct connection
+{
+    int socket;
+    enum {
+        RECV_REQUEST,   /* receiving request */
+        SEND_HEADER,    /* sending generated header */
+        SEND_REPLY,     /* sending reply */
+        DONE            /* connection closed, need to remove from queue */
+        } state;
+
+    char *request;
+    unsigned int request_length;
+
+    char *header;
+    unsigned int header_sent, header_length;
+
+    enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
+    char *reply;
+    FILE *reply_file;
+    unsigned int reply_sent, reply_length;
+};
 
 /* defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
@@ -144,12 +166,53 @@ static void parse_commandline(const int argc, char *argv[])
 
 
 
+/* ---------------------------------------------------------------------------
+ * Accept a connection from sockin and add it to the connection queue.
+ */
+static void accept_connection(void)
+{
+    /* FIXME */
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Main loop of the httpd - a select() and then delegation to accept
+ * connections, handle receiving of requests and sending of replies.
+ */
+static void httpd_poll(void)
+{
+    fd_set recv_set, send_set;
+    int max_fd = 0, select_ret;
+
+    #define MAX_FD_SET(sock, fdset) FD_SET(sock,fdset),\
+                                    max_fd = (max_fd < sock) ? sock : max_fd
+
+    FD_ZERO(&recv_set);
+    FD_ZERO(&send_set);
+
+    MAX_FD_SET(sockin, &recv_set);
+    #undef MAX_FD_SET
+
+    select_ret = select(max_fd + 1, &recv_set, &send_set, NULL, NULL);
+    if (select_ret == 0) errx(1, "select() timed out");
+    if (select_ret == -1) err(1, "select()");
+
+    if (FD_ISSET(sockin, &recv_set)) accept_connection();
+    /* FIXME incomplete */
+}
+
+
+
 int main(int argc, char *argv[])
 {
     printf("%s, %s.\n", pkgname, copyright);
     parse_commandline(argc, argv);
     init_sockin();
-    (void) close(sockin);
+
+    for (;;) httpd_poll();
+
+    (void) close(sockin); /* unreachable =/ fix later */
     return 0;
 }
 
