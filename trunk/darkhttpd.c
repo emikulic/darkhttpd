@@ -827,21 +827,6 @@ static void usage(void)
 
 
 /* ---------------------------------------------------------------------------
- * Strips the ending slash from a string (if there is one) and re-allocates
- * the string.
- */
-static void strip_endslash(char **str)
-{
-    if (strlen(*str) < 1) return;
-    if ((*str)[strlen(*str)-1] != '/') return;
-
-    (*str)[strlen(*str)-1] = 0;
-    *str = xrealloc(*str, strlen(*str)+1);
-}
-
-
-
-/* ---------------------------------------------------------------------------
  * Parses commandline options.
  */
 static void parse_commandline(const int argc, char *argv[])
@@ -854,9 +839,9 @@ static void parse_commandline(const int argc, char *argv[])
        )
         usage(); /* no wwwroot given */
 
-    /*wwwroot = xstrdup(argv[1]); FIXME */
     wwwroot = argv[1];
-    strip_endslash(&wwwroot);
+    /* Strip ending slash. */
+    if (wwwroot[strlen(wwwroot)-1] == '/') wwwroot[strlen(wwwroot)-1] = '\0';
 
     /* walk through the remainder of the arguments (if any) */
     for (i=2; i<argc; i++)
@@ -1844,7 +1829,6 @@ static void exit_quickly(int sig)
     }
     free(mime_map);
     free(keep_alive_field); 
-    /*free(wwwroot); FIXME */
     printf("done!\n");
     exit(EXIT_SUCCESS);
 }
