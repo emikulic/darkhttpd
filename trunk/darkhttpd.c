@@ -17,7 +17,8 @@
  *  x If-Modified-Since.
  *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
  *  x Keep-alive connections.
- *  . Chroot, set{uid|gid}.
+ *  . Chroot
+ *  . Set{uid|gid}.
  *  . Port to Win32.
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
@@ -250,6 +251,12 @@ static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static int want_chroot = 0;
+
+#define INVALID_UID ((uid_t) -1)
+#define INVALID_GID ((gid_t) -1)
+
+static uid_t drop_uid = INVALID_UID;
+static gid_t drop_gid = INVALID_GID;
 
 /* Default mimetype mappings - make sure this array is NULL terminated. */
 static const char *default_extension_map[] = {
@@ -891,9 +898,27 @@ static void usage(void)
     "\t--mimetypes filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n"
     "\n"
-    /* "\t--uid blah, --gid blah\n" FIXME */
-    , bindport, index_name);
+    "\t--uid uid, --gid gid\n"
+    "\t\tDrops privileges to given uid:gid after initialization.\n"
+    "\n",
+    bindport, index_name);
     exit(EXIT_FAILURE);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
+ * disinterested in value.
+ */
+static int str_to_num(const char *str, int *num)
+{
+    char *endptr;
+    long l = strtol(str, &endptr, 10);
+    if (*endptr != '\0') return 0;
+
+    if (num != NULL) *num = (int)l;
+    return 1;
 }
 
 
@@ -950,6 +975,21 @@ static void parse_commandline(const int argc, char *argv[])
         {
             if (++i >= argc) errx(1, "missing filename after --mimetypes");
             parse_extension_map_file(argv[i]);
+        }
+        else if (strcmp(argv[i], "--uid") == 0)
+        {
+            struct passwd *p;
+            int num;
+            if (++i >= argc) errx(1, "missing uid after --uid");
+            if (!str_to_num(argv[i], &num))
+                p = getpwnam(argv[i]);
+            else
+                p = getpwuid( (uid_t)num );
+
+            if (p == NULL)
+                errx(1, "no such uid: `%s'", argv[i]);
+            else
+                drop_uid = p->pw_uid;
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -2031,6 +2071,13 @@ int main(int argc, char *argv[])
         err(1, "signal(SIGINT)");
     if (signal(SIGQUIT, exit_quickly) == SIG_ERR)
         err(1, "signal(SIGQUIT)");
+
+    /* security */
+    if (drop_uid != INVALID_UID)
+    {
+        if (setuid(drop_uid) == -1) err(1, "setuid(%d)", drop_uid);
+        debugf("set uid to %d\n", drop_uid);
+    }
 
     for (;;) httpd_poll();
 
