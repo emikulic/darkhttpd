@@ -1,6 +1,9 @@
+/* +----------------------------------------------------------------------- *\
+   | */ static const char pkgname[]   = "darkhttpd/0.1";                    /*
+   | */ static const char copyright[] = "copyright (c) 2003 Emil Mikulic";  /*
+   +----------------------------------------------------------------------- */
+
 /*
- * darkhttpd
- * copyright (c) 2003 Emil Mikulic.
  * $Id$
  */
 
@@ -8,28 +11,27 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <err.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 
-
-/*
- * Defaults - these can be overridden by various command-line arguments.
- * Run `darkhttpd --help' for help.
- */
-#define DEFAULT_PORT        80
-#define DEFAULT_BINDADDR    INADDR_ANY
-#define DEFAULT_MAXCONN     -1 /* kern.ipc.somaxconn */
-
-/*@unused@*/
-static const char server_version[] = "darkhttpd/0.1";
-
-
+/* defaults can be overridden on the command-line */
+static u_int32_t bindaddr = INADDR_ANY;
+static u_int16_t bindport = 80;
+static int max_connections = -1; /* kern.ipc.somaxconn */
 
 static int sockin;
+/*@null@*/ 
+static char *wwwroot = NULL;
 
-/*int main(int argc, char *argv[])*/
-int main()
+
+
+/* ---------------------------------------------------------------------------
+ * Initialize the sockin global.  This is the socket that we accept
+ * connections from.
+ */
+static void init_sockin(void)
 {
     struct sockaddr_in addrin;
     int sockopt;
@@ -46,19 +48,75 @@ int main()
 
     /* bind socket */
     addrin.sin_family = (u_char)PF_INET;
-    addrin.sin_port = htons(DEFAULT_PORT);
-    addrin.sin_addr.s_addr = DEFAULT_BINDADDR;
+    addrin.sin_port = htons(bindport);
+    addrin.sin_addr.s_addr = bindaddr;
     memset(&(addrin.sin_zero), 0, 8);
     if (bind(sockin, (struct sockaddr *)&addrin,
             sizeof(struct sockaddr)) == -1)
-        err(1, "bind()");
+        err(1, "bind(port %u)", bindport);
 
     /* listen on socket */
-    if (listen(sockin, DEFAULT_MAXCONN) == -1)
+    if (listen(sockin, max_connections) == -1)
         err(1, "listen()");
+}
 
-    /* --- do stuff here --- */
 
+
+/* ---------------------------------------------------------------------------
+ * Prints a usage statement.
+ */
+static void usage(void)
+{
+    printf("\n  usage: darkhttpd /path/to/wwwroot [options]\n\n"
+    "options:\n"
+    "\t--port number (default: %u)\n" /* DEFAULT_PORT */
+    "\t\tSpecifies which port to listen on for connections.\n"
+    "\n"
+    "\t--bind ip (default: all)\n"
+    "\t\tIf multiple interfaces are present,\n"
+    "\t\tspecifies which one to bind the listening port to.\n"
+    "\n"
+    "\t--maxconn number (default: system maximum)\n"
+    "\t\tSpecifies how many concurrent connections to accept.\n"
+    "\n"
+    "\t--log filename (default: no logging)\n"
+    "\t\tSpecifies which file to log requests to.\n"
+    "\n"
+    "\t--chroot (default: don't chroot)\n"
+    "\t\tLocks server into wwwroot directory for added security.\n"
+    "\n"
+    "\t--uid blah, --gid blah\n" /* FIXME */
+    , bindport);
+    exit(EXIT_FAILURE);
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Parses commandline options.
+ */
+static void parse_commandline(const int argc, char *argv[])
+{
+    int i;
+
+    if (argc < 2) usage(); /* no wwwroot given */
+    wwwroot = argv[1];
+
+    /* walk through the remainder of the arguments (if any) */
+    for (i=2; i<argc; i++)
+    {
+        /* FIXME */
+        errx(1, "unknown argument `%s'", argv[i]);
+    }
+}
+
+
+
+int main(int argc, char *argv[])
+{
+    printf("%s, %s.\n", pkgname, copyright);
+    parse_commandline(argc, argv);
+    init_sockin();
     (void) close(sockin);
     return 0;
 }
