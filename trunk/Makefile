@@ -1,12 +1,12 @@
-CFLAGS = -pipe -ansi -pedantic -g \
--Wall -Wredundant-decls -Wnested-externs -Wstrict-prototypes \
--Wpointer-arith -Winline -Wcast-qual -W \
--Wbad-function-cast -Wcast-align -Wchar-subscripts -Wshadow \
--Wwrite-strings -Wmissing-prototypes
+ALLWARNS = -Wall -Wtraditional -Wshadow -Wpointer-arith -Wcast-qual \
+-Wcast-align -Wwrite-strings -Wconversion -Waggregate-return \
+-Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
+-Wredundant-decls -Wnested-externs -Wlong-long -Winline 
+
+CFLAGS = -pipe -ansi -pedantic -g $(ALLWARNS)
 
 all:
 	gcc -o out $(CFLAGS) darkhttpd.c
 
 splint:
-	splint -skipposixheaders +posixlib +stats darkhttpd.c
-
+	splint -weak -skipposixheaders +posixlib +stats darkhttpd.c
