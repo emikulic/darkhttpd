@@ -33,6 +33,10 @@ static const char copyright[] = "copyright (c) 2003 Emil Mikulic";
 static const char rcsid[]     =
     "$Id$";
 
+#ifndef DEBUG
+#define NDEBUG
+#endif
+
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
 #include <sys/sendfile.h>
@@ -970,9 +974,9 @@ static void parse_commandline(const int argc, char *argv[])
     {
         printf("%s "
 #ifdef NDEBUG
-        "NDEBUG"
+        "-debug"
 #else
-        "!NDEBUG"
+        "+debug"
 #endif
         "\n", rcsid);
         exit(EXIT_FAILURE);
