@@ -18,7 +18,7 @@
  *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
  *  x Keep-alive connections.
  *  . Chroot
- *  . Set{uid|gid}.
+ *  x Set{uid|gid}.
  *  . Port to Win32.
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
@@ -41,6 +41,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -990,6 +991,21 @@ static void parse_commandline(const int argc, char *argv[])
                 errx(1, "no such uid: `%s'", argv[i]);
             else
                 drop_uid = p->pw_uid;
+        }
+        else if (strcmp(argv[i], "--gid") == 0)
+        {
+            struct group *g;
+            int num;
+            if (++i >= argc) errx(1, "missing gid after --gid");
+            if (!str_to_num(argv[i], &num))
+                g = getgrnam(argv[i]);
+            else
+                g = getgrgid( (gid_t)num );
+
+            if (g == NULL)
+                errx(1, "no such gid: `%s'", argv[i]);
+            else
+                drop_gid = g->gr_gid;
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -2073,6 +2089,11 @@ int main(int argc, char *argv[])
         err(1, "signal(SIGQUIT)");
 
     /* security */
+    if (drop_gid != INVALID_GID)
+    {
+        if (setgid(drop_gid) == -1) err(1, "setgid(%d)", drop_gid);
+        debugf("set gid to %d\n", drop_gid);
+    }
     if (drop_uid != INVALID_UID)
     {
         if (setuid(drop_uid) == -1) err(1, "setuid(%d)", drop_uid);
