@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 /* for easy defusal */
@@ -29,6 +30,8 @@ struct connection
     LIST_ENTRY(connection) entries;
 
     int socket;
+    in_addr_t client;
+    time_t last_active;
     enum {
         RECV_REQUEST,   /* receiving request */
         SEND_HEADER,    /* sending generated header */
@@ -36,29 +39,35 @@ struct connection
         DONE            /* connection closed, need to remove from queue */
         } state;
 
+    /* char request[request_length+1] is null-terminated */
     char *request;
     unsigned int request_length;
 
     char *header;
     unsigned int header_sent, header_length;
+    int header_dont_free;
 
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
     char *reply;
+    int reply_dont_free;
     FILE *reply_file;
     unsigned int reply_sent, reply_length;
 };
 
 
 
-/* defaults can be overridden on the command-line */
+/* If a connection is idle for IDLETIME seconds or more, it gets closed and
+ * removed from the connlist.
+ */
+#define IDLETIME 60
+
+/* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
 static u_int16_t bindport = 80;
 static int max_connections = -1; /* kern.ipc.somaxconn */
 
 static int sockin;  /* socket to accept connections from */
-/*@null@*/ 
 static char *wwwroot = NULL;    /* a path name */
-/*@null@*/ 
 static char *logfile_name = NULL;   /* NULL = no logging */
 static int want_chroot = 0;
 
@@ -190,6 +199,36 @@ static void *xmalloc(const size_t size)
 
 
 /* ---------------------------------------------------------------------------
+ * Allocate and initialize an empty connection.
+ */
+static struct connection *new_connection(void)
+{
+    struct connection *conn = (struct connection *)
+        xmalloc(sizeof(struct connection));
+
+    conn->socket = -1;
+    conn->client = INADDR_ANY;
+    conn->last_active = time(NULL);
+    conn->request = NULL;
+    conn->request_length = 0;
+    conn->header = NULL;
+    conn->header_dont_free = 0; /* you'll want to, later */
+    conn->header_sent = conn->header_length = 0;
+    conn->reply = NULL;
+    conn->reply_dont_free = 0; /* you'll want to, later */
+    conn->reply_file = NULL;
+
+    /* Make it harmless so it gets garbage-collected if it should, for some
+     * reason, fail to be correctly filled out.
+     */
+    conn->state = DONE;
+
+    return conn;
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Accept a connection from sockin and add it to the connection queue.
  */
 static void accept_connection(void)
@@ -199,14 +238,7 @@ static void accept_connection(void)
     struct connection *conn;
 
     /* allocate and initialise struct connection */
-    conn = (struct connection *)xmalloc(sizeof(struct connection));
-    conn->socket = -1;
-    conn->request = NULL;
-    conn->request_length = 0;
-    conn->header = NULL;
-    conn->header_sent = conn->header_length = 0;
-    conn->reply = NULL;
-    conn->reply_file = NULL;
+    conn = new_connection();
 
     sin_size = (socklen_t)sizeof(struct sockaddr);
     conn->socket = accept(sockin, (struct sockaddr *)&addrin,
@@ -214,6 +246,7 @@ static void accept_connection(void)
     if (conn->socket == -1) err(1, "accept()");
 
     conn->state = RECV_REQUEST;
+    conn->client = addrin.sin_addr.s_addr;
     LIST_INSERT_HEAD(&connlist, conn, entries);
 
     debugf("accepted connection from %s:%u\n",
@@ -230,8 +263,8 @@ static void free_connection(struct connection *conn)
 {
     if (conn->socket != -1) close(conn->socket);
     if (conn->request != NULL) free(conn->request);
-    if (conn->header != NULL) free(conn->header);
-    if (conn->reply != NULL) free(conn->reply);
+    if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
+    if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_file != NULL) fclose(conn->reply_file);
 }
 
@@ -244,6 +277,65 @@ static void *xrealloc(void *original, const size_t size)
     void *ptr = realloc(original, size);
     if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
     return ptr;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * If a connection has been idle for more than IDLETIME seconds, it will be
+ * marked as DONE and killed off in httpd_poll()
+ */
+static void poll_check_timeout(struct connection *conn)
+{
+    if (time(NULL) - conn->last_active >= IDLETIME)
+        conn->state = DONE;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * A default reply for any occasion.
+ */
+static void default_reply(struct connection *conn,
+    const int errcode, const char *errname)
+{
+    conn->reply_length = asprintf(&(conn->reply),
+    "<html><head><title>%d %s</title></head><body>\n"
+    "<h1>%s</h1><hr>\n"
+    "%s\n"
+    "</body></html>\n",
+    errcode, errname, errname, pkgname);
+
+    if (conn->reply == NULL) errx(1, "out of memory in asprintf()");
+
+    conn->header_length = asprintf(&(conn->header),
+    "HTTP/1.1 %d %s\r\n"
+    /* FIXME: Date */
+    "Server: %s\r\n"
+    "Connection: close\r\n"
+    "Content-Length: %d\r\n"
+    "Content-Type: text/html\r\n"
+    "\r\n",
+    errcode, errname, pkgname, conn->reply_length);
+
+    if (conn->header == NULL) errx(1, "out of memory in asprintf()");
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Process a request: build the header and reply, advance state.
+ */
+static void process_request(struct connection *conn)
+{
+    debugf(conn->request);
+
+    default_reply(conn, 501, "Not Implemented");
+    conn->state = DONE; /* FIXME: SEND_HEADER */
+
+    #if 1
+    debugf("%s%s---\n", conn->header, conn->reply);
+    #endif
 }
 
 
@@ -265,22 +357,20 @@ static void poll_recv_request(struct connection *conn)
         conn->state = DONE;
         return;
     }
+    conn->last_active = time(NULL);
+    #undef BUFSIZE
 
     /* append to conn->request */
-    conn->request = xrealloc(conn->request, conn->request_length + recvd);
+    conn->request = xrealloc(conn->request,
+        conn->request_length + recvd + 1);
     memcpy(conn->request+conn->request_length, buf, recvd);
     conn->request_length += recvd;
+    conn->request[conn->request_length] = 0;
 
-    #if 1
-    { int i;
-    printf("recvd %d: ", recvd);
-    for (i=0; i<recvd; i++) printf("%02x ",
-    conn->request[conn->request_length-recvd+i]);
-    printf("\n");
-    }
-    #endif
-
-    #undef BUFSIZE
+    /* process request if we have all of it */
+    if (conn->request_length > 4 &&
+        memcmp(conn->request+conn->request_length-4, "\r\n\r\n", 4) == 0)
+        process_request(conn);
 }
 
 
@@ -314,25 +404,28 @@ static void httpd_poll(void)
     MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH(conn, &connlist, entries)
-    switch (conn->state)
     {
-    case RECV_REQUEST:
-        MAX_FD_SET(conn->socket, &recv_set);
-        break;
+        poll_check_timeout(conn);
+        switch (conn->state)
+        {
+        case RECV_REQUEST:
+            MAX_FD_SET(conn->socket, &recv_set);
+            break;
 
-    case SEND_HEADER:
-    case SEND_REPLY:
-        MAX_FD_SET(conn->socket, &send_set);
-        break;
+        case SEND_HEADER:
+        case SEND_REPLY:
+            MAX_FD_SET(conn->socket, &send_set);
+            break;
 
-    case DONE:
-        /* clean out stale connections while we're at it */
-        LIST_REMOVE(conn, entries);
-        free_connection(conn);
-        free(conn);
-        break;
+        case DONE:
+            /* clean out stale connections while we're at it */
+            LIST_REMOVE(conn, entries);
+            free_connection(conn);
+            free(conn);
+            break;
 
-    default: errx(1, "invalid state");
+        default: errx(1, "invalid state");
+        }
     }
     #undef MAX_FD_SET
 
