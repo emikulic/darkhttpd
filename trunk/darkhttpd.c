@@ -538,61 +538,6 @@ static char *make_safe_uri(char *uri)
 
 
 
-/* Unit test for make_safe_uri() */
-static void test_make_safe_uri(void)
-{
-    #define SAFE(from,to) do { char *uri = xstrdup(from), *tmp;\
-        tmp = make_safe_uri(uri); if (tmp == NULL) \
-        debugf("FAIL: `%s' unsafe, expecting `%s'\n", from, to); \
-        else if (strcmp(tmp, to) != 0) \
-        debugf("FAIL: `%s' -> `%s', expecting `%s'\n", from, tmp, to); \
-        safefree(tmp); safefree(uri); } while(0)
-
-    SAFE("/", "/");
-    SAFE("//", "/");
-    SAFE("///", "/");
-    SAFE("/moo", "/moo");
-    SAFE("//moo", "/moo");
-    SAFE("/moo/", "/moo/");
-    SAFE("/moo//", "/moo/");
-    SAFE("/moo///", "/moo/");
-    SAFE("/.", "/");
-    SAFE("/./", "/");
-    SAFE("//./", "/");
-    SAFE("/.//", "/");
-    SAFE("///.///", "/");
-    SAFE("/moo/..", "/");
-    SAFE("/moo/../", "/");
-    SAFE("///moo///..///", "/");
-    SAFE("/foo/bar/..", "/foo");
-    SAFE("/foo/bar/../", "/foo/");
-    SAFE("/foo/bar/../moo", "/foo/moo");
-    SAFE("/foo/bar/../moo/", "/foo/moo/");
-    SAFE("/./moo/./../a/b/c/../.././d/../..", "/");
-    SAFE("/./moo/./../a/b/c/../.././d/../../", "/");
-    SAFE("/./moo/./../a/b/c/../.././d/../../xyzzy/", "/xyzzy/");
-
-    #undef SAFE
-
-    #define UNSAFE(x) do { char *uri = xstrdup(x), *tmp;\
-        tmp = make_safe_uri(uri); if (tmp != NULL) { \
-        debugf("FAIL: `%s' is UNSAFE, not `%s'\n", x, tmp); \
-        safefree(tmp); }; safefree(uri); } while(0)
-
-    UNSAFE("/..");
-    UNSAFE("/../");
-    UNSAFE("/./..");
-    UNSAFE("/./../");
-    UNSAFE("/foo/../..");
-    UNSAFE("/foo/../../");
-    UNSAFE("/./foo/../../");
-    UNSAFE("/./moo/./../a/b/c/../.././d/../../..");
-
-    #undef UNSAFE
-}
-
-
-
 /* ---------------------------------------------------------------------------
  * Associates an extension with a mimetype in the mime_map.  Entries are in
  * unsorted order.  Makes copies of extension and mimetype strings.
@@ -2060,9 +2005,6 @@ static void exit_quickly(int sig)
  */
 int main(int argc, char *argv[])
 {
-#ifndef NDEBUG
-    test_make_safe_uri();
-#endif
     printf("%s, %s.\n", pkgname, copyright);
     parse_default_extension_map();
     parse_commandline(argc, argv);
