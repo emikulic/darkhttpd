@@ -9,6 +9,7 @@
 
 /*
  * TODO:
+ *  . Ignore SIGPIPE.
  *  . Actually serve files.
  *  . Generate directory entries.
  *  . Log to file.
@@ -240,11 +241,12 @@ static struct connection *new_connection(void)
     conn->request = NULL;
     conn->request_length = 0;
     conn->header = NULL;
-    conn->header_dont_free = 0; /* you'll want to, later */
     conn->header_sent = conn->header_length = 0;
+    conn->header_dont_free = 0; /* you'll want to, later */
     conn->reply = NULL;
     conn->reply_dont_free = 0; /* you'll want to, later */
     conn->reply_file = NULL;
+    conn->reply_sent = conn->reply_length = 0;
 
     /* Make it harmless so it gets garbage-collected if it should, for some
      * reason, fail to be correctly filled out.
@@ -349,6 +351,47 @@ static char *rfc1123_date(const time_t when)
 
 
 /* ---------------------------------------------------------------------------
+ * Decode URL by converting %XX (where XX are hexadecimal digits) to the
+ * character it represents.  Don't forget to free the return value.
+ */
+static char *urldecode(const char *url)
+{
+    int len = strlen(url);
+    char *out = (char*)xmalloc(len+1);
+    int i, pos;
+
+    for (i=0, pos=0; i<len; i++)
+    {
+        if (url[i] == '%' && i+2 < len &&
+            isxdigit(url[i+1]) && isxdigit(url[i+2]))
+        {
+            /* decode %XX */
+            #define HEX_TO_DIGIT(hex) ( \
+                ((hex) >= 'A' && (hex) <= 'F') ? ((hex)-'A'+10): \
+                ((hex) >= 'a' && (hex) <= 'f') ? ((hex)-'a'+10): \
+                ((hex)-'0') )
+
+            out[pos++] = HEX_TO_DIGIT(url[i+1]) * 16 +
+                         HEX_TO_DIGIT(url[i+2]);
+            i += 2;
+
+            #undef HEX_TO_DIGIT
+        }
+        else
+        {
+            /* straight copy */
+            out[pos++] = url[i];
+        }
+    }
+    out[pos] = 0;
+
+    out = xrealloc(out, strlen(out));  /* dealloc what we don't need */
+    return out;
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * A default reply for any (erroneous) occasion.
  */
 static void default_reply(struct connection *conn,
@@ -413,6 +456,24 @@ static void parse_request(const char *req, const int length,
 static void process_get(struct connection *conn,
     const char *url, const int header_only)
 {
+    char *decoded_url, *target;
+
+    /* work out which file we're trying to get */
+    decoded_url = urldecode(url);
+    if (decoded_url[strlen(decoded_url)-1] == '/')
+    {
+        asprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
+    }
+    else
+    {
+        asprintf(&target, "%s%s", wwwroot, decoded_url);
+    }
+    free(decoded_url);
+    decoded_url = NULL;
+
+    debugf(">>>%s<<<\n", target);
+    free(target);
+
     /* FIXME */
     default_reply(conn, 200, "OK", "Nothing to see here.  Move along.");
 }
