@@ -61,6 +61,13 @@ struct connection
  */
 #define IDLETIME 60
 
+/* To prevent a malformed request from eating up too much memory, die once the
+ * request exceeds this many bytes:
+ */
+#define MAX_REQUEST_LENGTH 20000
+
+
+
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
 static u_int16_t bindport = 80;
@@ -116,8 +123,8 @@ static void init_sockin(void)
 static void usage(void)
 {
     printf("\n  usage: darkhttpd /path/to/wwwroot [options]\n\n"
-    "options:\n"
-    "\t--port number (default: %u)\n" /* DEFAULT_PORT */
+    "options:\n\n"
+    "\t--port number (default: %u)\n" /* bindport */
     "\t\tSpecifies which port to listen on for connections.\n"
     "\n"
     "\t--addr ip (default: all)\n"
@@ -372,6 +379,13 @@ static void poll_recv_request(struct connection *conn)
     if (conn->request_length > 4 &&
         memcmp(conn->request+conn->request_length-4, "\r\n\r\n", 4) == 0)
         process_request(conn);
+
+    /* die if it's too long */
+    if (conn->request_length > MAX_REQUEST_LENGTH)
+    {
+        default_reply(conn, 400, "Bad Request");
+        conn->state = SEND_HEADER;
+    }
 }
 
 
