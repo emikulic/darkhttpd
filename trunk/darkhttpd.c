@@ -13,7 +13,7 @@
  *  x Actually serve files.
  *  . Generate directory listings.
  *  x Log to file.
- *  . Partial content.
+ *  x Partial content.
  *  x If-Modified-Since.
  *  x Test If-Mod-Since with IE, Phoenix, lynx, links, Opera
  *  . Keep-alive connections.
@@ -1291,7 +1291,7 @@ static void poll_send_reply(struct connection *conn)
     else
     {
         /* from file! */
-        #define BUFSIZE 65000
+        #define BUFSIZE 40000
         char buf[BUFSIZE];
         size_t amount = min((size_t)BUFSIZE,
             conn->reply_length - conn->reply_sent);
@@ -1300,10 +1300,6 @@ static void poll_send_reply(struct connection *conn)
         if (fseek(conn->reply_file,
             (long)(conn->reply_start + conn->reply_sent), SEEK_SET) == -1)
             err(1, "fseek(%d)", conn->reply_start + conn->reply_sent);
-
-        debugf("start=%d, sent=%d, length=%d\n",
-            conn->reply_start,
-            conn->reply_sent, conn->reply_length);
 
         if (fread(buf, amount, 1, conn->reply_file) != 1)
         {
@@ -1469,6 +1465,34 @@ static void httpd_poll(void)
 
 
 /* ---------------------------------------------------------------------------
+ * SIG{INT,QUIT} handler - clean up quickly and exit by re-sending the signal
+ *
+ * http://www.cons.org/cracauer/sigint.html
+ */
+static void exit_quickly(int sig)
+{
+    struct connection *conn;
+
+    printf("caught %s, cleaning up...", strsignal(sig)); fflush(stdout);
+    LIST_FOREACH(conn, &connlist, entries)
+    {
+        LIST_REMOVE(conn, entries);
+        free_connection(conn);
+        free(conn);
+    }
+    close(sockin);
+    printf("done!\n");
+
+    /* Send back to the default handler - this ensures the correct exit
+     * value will be used.
+     */
+    if (signal(sig, SIG_DFL) == SIG_ERR) err(1, "signal(SIG_DFL)");
+    if (raise(sig) == -1) err(1, "raise()");
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Execution starts here.
  */
 int main(int argc, char *argv[])
@@ -1485,13 +1509,17 @@ int main(int argc, char *argv[])
         if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
     }
 
+    /* signals */
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
         err(1, "signal(ignore SIGPIPE)");
+    if (signal(SIGINT, exit_quickly) == SIG_ERR)
+        err(1, "signal(SIGINT)");
+    if (signal(SIGQUIT, exit_quickly) == SIG_ERR)
+        err(1, "signal(SIGQUIT)");
 
     for (;;) httpd_poll();
 
-    (void) close(sockin); /* unreachable =/ fix later */
-    return 0;
+    return 0; /* unreachable */
 }
 
 /* vim:set tabstop=4 shiftwidth=4 expandtab tw=78: */
