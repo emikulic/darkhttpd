@@ -1739,7 +1739,7 @@ static void poll_send_header(struct connection *conn)
  * read error.
  */
 static ssize_t send_from_file(const int s, const int fd,
-    const off_t ofs, const size_t size)
+    off_t ofs, const size_t size)
 {
 #ifdef __FreeBSD__
     off_t sent;
