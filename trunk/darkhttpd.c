@@ -206,7 +206,7 @@ struct connection
     enum { REPLY_GENERATED, REPLY_FROMFILE } reply_type;
     char *reply;
     int reply_dont_free;
-    FILE *reply_file;
+    int reply_fd;
     size_t reply_start, reply_length, reply_sent;
 
     unsigned int total_sent; /* header + body = total, for logging */
@@ -282,6 +282,16 @@ static const char default_mimetype[] = "application/octet-stream";
 /* Connection or Keep-Alive field, depending on conn_close. */
 #define keep_alive(conn) ((conn)->conn_close ? \
     "Connection: close\r\n" : keep_alive_field)
+
+
+
+/* ---------------------------------------------------------------------------
+ * close that dies on error.
+ */
+static void xclose(const int fd)
+{
+    if (close(fd) == -1) err(1, "close()");
+}
 
 
 
@@ -1037,7 +1047,7 @@ static struct connection *new_connection(void)
     conn->conn_close = 1;
     conn->reply = NULL;
     conn->reply_dont_free = 0;
-    conn->reply_file = NULL;
+    conn->reply_fd = -1;
     conn->reply_start = 0;
     conn->reply_length = 0;
     conn->reply_sent = 0;
@@ -1092,7 +1102,7 @@ static void free_connection(struct connection *conn)
 {
     debugf("free_connection(%d)\n", conn->socket);
     log_connection(conn);
-    if (conn->socket != -1) close(conn->socket);
+    if (conn->socket != -1) xclose(conn->socket);
     if (conn->request != NULL) safefree(conn->request);
     if (conn->method != NULL) safefree(conn->method);
     if (conn->uri != NULL) safefree(conn->uri);
@@ -1101,7 +1111,7 @@ static void free_connection(struct connection *conn)
     if (conn->header != NULL && !conn->header_dont_free)
         safefree(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) safefree(conn->reply);
-    if (conn->reply_file != NULL) fclose(conn->reply_file);
+    if (conn->reply_fd != -1) xclose(conn->reply_fd);
 }
 
 
@@ -1137,7 +1147,7 @@ static void recycle_connection(struct connection *conn)
     conn->conn_close = 1;
     conn->reply = NULL;
     conn->reply_dont_free = 0;
-    conn->reply_file = NULL;
+    conn->reply_fd = -1;
     conn->reply_start = 0;
     conn->reply_length = 0;
     conn->reply_sent = 0;
@@ -1550,10 +1560,10 @@ static void process_get(struct connection *conn)
         return;
     }
 
-    conn->reply_file = fopen(target, "rb");
+    conn->reply_fd = open(target, O_RDONLY);
     safefree(target);
 
-    if (conn->reply_file == NULL)
+    if (conn->reply_fd == -1)
     {
         /* fopen() failed */
         if (errno == EACCES)
@@ -1568,7 +1578,7 @@ static void process_get(struct connection *conn)
     }
 
     /* get information on the file, again, just in case */
-    if (fstat(fileno(conn->reply_file), &filestat) == -1)
+    if (fstat(conn->reply_fd, &filestat) == -1)
     {
         default_reply(conn, 500, "Internal Server Error",
             "fstat() failed: %s.", strerror(errno));
@@ -1797,11 +1807,12 @@ static void poll_send_header(struct connection *conn)
  * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
  * read error.
  */
-static ssize_t send_from_file(int s, FILE *fp, long ofs, size_t size)
+static ssize_t send_from_file(const int s, const int fd,
+    const off_t ofs, const size_t size)
 {
 #ifdef __FreeBSD__
     off_t sent;
-    if (sendfile(fileno(fp), s, (off_t)ofs, size, NULL, &sent, 0) == -1)
+    if (sendfile(fd, s, ofs, size, NULL, &sent, 0) == -1)
     {
         if (errno == EAGAIN)
             return sent;
@@ -1811,15 +1822,25 @@ static ssize_t send_from_file(int s, FILE *fp, long ofs, size_t size)
     else return size;
 #else
 #ifdef __linux
-    return sendfile(s, fileno(fp), &ofs, size);
+    return sendfile(s, fd, &ofs, size);
 #else
     #define BUFSIZE 20000
     char buf[BUFSIZE];
     size_t amount = min((size_t)BUFSIZE, size);
+    ssize_t numread;
     #undef BUFSIZE
 
-    if (fseek(fp, ofs, SEEK_SET) == -1) err(1, "fseek(%ld)", ofs);
-    if (fread(buf, amount, 1, fp) != 1) return -2;
+    if (lseek(fd, ofs, SEEK_SET) == -1) err(1, "fseek(%d)", (int)ofs);
+    numread = read(fd, buf, amount);
+    if (numread != amount)
+    {
+        if (numread == 0)
+            fprintf(stderr, "premature eof on fd %d\n", fd);
+        else if (numread != -1)
+            fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
+                numread, amount, fd);
+        return -1;
+    }
     return send(s, buf, amount, 0);
 #endif
 #endif
@@ -1846,24 +1867,9 @@ static void poll_send_reply(struct connection *conn)
     }
     else
     {
-        sent = send_from_file(conn->socket, conn->reply_file,
-            (long)(conn->reply_start + conn->reply_sent),
+        sent = send_from_file(conn->socket, conn->reply_fd,
+            (off_t)(conn->reply_start + conn->reply_sent),
             conn->reply_length - conn->reply_sent);
-
-        if (sent == -2)
-        {
-            if (feof(conn->reply_file))
-                fprintf(stderr, "(%d) premature end of file\n",
-                conn->socket);
-            else
-                fprintf(stderr, "fread() error: %s\n",
-                    strerror( ferror(conn->reply_file) )); /* <- FIXME? */
-
-            conn->conn_close = 1;
-            conn->state = DONE;
-            return;
-        }
-
     }
     conn->last_active = time(NULL);
     debugf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
@@ -2032,7 +2038,7 @@ static void exit_quickly(int sig)
         free_connection(conn);
         free(conn);
     }
-    close(sockin);
+    xclose(sockin);
     if (logfile != NULL) fclose(logfile);
 
     /* free mime_map */
