@@ -1418,9 +1418,27 @@ static void process_get(struct connection *conn)
         mimetype = uri_content_type(safe_url);
     }
     free(safe_url); safe_url = NULL;
-
     debugf("uri=%s, target=%s, content-type=%s\n",
         conn->uri, target, mimetype);
+
+    /* stat the path - there is a potential race between this and the fopen()
+     * call, but it's better than trying to open a FIFO or a device.
+     */
+    if (stat(target, &filestat) == -1)
+    {
+        default_reply(conn, 500, "Internal Server Error",
+            "stat() failed: %s.", strerror(errno));
+        return;
+    }
+
+    /* make sure it's a regular file */
+    if (!S_ISREG(filestat.st_mode))
+    /*(filestat.st_mode & S_IFMT) != S_IFREG)*/
+    {
+        default_reply(conn, 403, "Forbidden", "Not a regular file.");
+        return;
+    }
+
     conn->reply_file = fopen(target, "rb");
     free(target); target = NULL;
 
