@@ -167,11 +167,14 @@ size_t longest_ext = 0;
 
 
 
-/* If a connection is idle for IDLETIME seconds or more, it gets closed and
- * removed from the connlist.  Define to 0 to remove the timeout
+/* If a connection is idle for idletime seconds or more, it gets closed and
+ * removed from the connlist.  Set to 0 to remove the timeout
  * functionality.
  */
-#define IDLETIME 60
+static int idletime = 60;
+static char *keep_alive_field = NULL;
+
+
 
 /* To prevent a malformed request from eating up too much memory, die once the
  * request exceeds this many bytes:
@@ -209,6 +212,16 @@ static const char *default_extension_map[] = {
 };
 
 static const char default_mimetype[] = "application/octet-stream";
+
+
+
+/* ---------------------------------------------------------------------------
+ * Returns Connection or Keep-Alive field, depending on conn_close.
+ */
+static const char *keep_alive(const struct connection *conn)
+{
+    return (conn->conn_close ? "Connection: close\r\n" : keep_alive_field);
+}
 
 
 
@@ -1026,14 +1039,14 @@ static void strntoupper(char *str, const size_t length)
 
 
 /* ---------------------------------------------------------------------------
- * If a connection has been idle for more than IDLETIME seconds, it will be
+ * If a connection has been idle for more than idletime seconds, it will be
  * marked as DONE and killed off in httpd_poll()
  */
 static void poll_check_timeout(struct connection *conn)
 {
-    if (IDLETIME > 0) /* optimised away by compiler */
+    if (idletime > 0) /* optimised away by compiler */
     {
-        if (time(NULL) - conn->last_active >= IDLETIME)
+        if (time(NULL) - conn->last_active >= idletime)
         {
             debugf("poll_check_timeout(%d) caused closure\n", conn->socket);
             conn->state = DONE;
@@ -1130,12 +1143,11 @@ static void default_reply(struct connection *conn,
      "HTTP/1.1 %d %s\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
-     "%s" /* conn_close */
+     "%s" /* keep-alive */
      "Content-Length: %d\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
-     errcode, errname, date, pkgname,
-     (conn->conn_close ? "Connection: close\r\n" : ""),
+     errcode, errname, date, pkgname, keep_alive(conn),
      conn->reply_length);
 
     conn->reply_type = REPLY_GENERATED;
@@ -1423,17 +1435,16 @@ static void process_get(struct connection *conn)
             "HTTP/1.1 206 Partial Content\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
-            "%s" /* conn_close */
+            "%s" /* keep-alive */
             "Content-Length: %d\r\n"
             "Content-Range: bytes %d-%d/%d\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname,
-            (conn->conn_close ? "Connection: close\r\n" : ""),
-            conn->reply_length,
-            from, to, filestat.st_size, mimetype, lastmod
+            rfc1123_date(date, time(NULL)), pkgname, keep_alive(conn),
+            conn->reply_length, from, to, filestat.st_size,
+            mimetype, lastmod
         );
         conn->http_code = 206;
         debugf("sending %u-%u/%u\n", (unsigned int)from, (unsigned int)to, 
@@ -1447,14 +1458,13 @@ static void process_get(struct connection *conn)
             "HTTP/1.1 200 OK\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
-            "%s" /* conn_close */
+            "%s" /* keep-alive */
             "Content-Length: %d\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname,
-            (conn->conn_close ? "Connection: close\r\n" : ""),
+            rfc1123_date(date, time(NULL)), pkgname, keep_alive(conn),
             conn->reply_length, mimetype, lastmod
         );
         conn->http_code = 200;
@@ -1692,7 +1702,7 @@ static void httpd_poll(void)
     int bother_with_timeout = 0;
     struct timeval timeout;
 
-    timeout.tv_sec = IDLETIME;
+    timeout.tv_sec = idletime;
     timeout.tv_usec = 0;
 
     FD_ZERO(&recv_set);
@@ -1732,9 +1742,7 @@ static void httpd_poll(void)
             else
             {
                 recycle_connection(conn);
-                /* FIXME: could this be done smarter?
-                 * (lines stolen from `case RECV_REQUEST')
-                 */
+                /* And enqueue as RECV_REQUEST. */
                 MAX_FD_SET(conn->socket, &recv_set);
                 bother_with_timeout = 1;
             }
@@ -1808,7 +1816,7 @@ static void exit_quickly(int sig)
         free(mime_map[i].mimetype);
     }
     free(mime_map);
-   
+    free(keep_alive_field); 
     /*free(wwwroot); FIXME */
     printf("done!\n");
     exit(EXIT_SUCCESS);
@@ -1831,6 +1839,7 @@ int main(int argc, char *argv[])
      * parsing a user-specified file.
      */
     sort_mime_map();
+    xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", idletime);
     init_sockin();
 
     /* open logfile */
