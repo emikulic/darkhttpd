@@ -20,7 +20,7 @@
  *  . Port to Win32.
  *  x Detect Content-Type from a list of content types.
  *  x Log Referer, User-Agent.
- *  . Ensure URIs requested are safe.
+ *  x Ensure URIs requested are safe.
  */
 
 #include <sys/types.h>
@@ -169,14 +169,100 @@ static void *xrealloc(void *original, const size_t size)
 
 
 /* ---------------------------------------------------------------------------
- * Split string src into dest with range [left:right-1]
+ * Split string out of src with range [left:right-1]
  */
-static void split_string(char **dest, const char *src,
-    const int left, const int right)
+static char *split_string(const char *src, const int left, const int right)
 {
-    *dest = (char*) xmalloc(right - left + 1);
-    memcpy(*dest, src+left, right-left);
-    (*dest)[right-left] = '\0';
+    char *dest = (char*) xmalloc(right - left + 1);
+    memcpy(dest, src+left, right-left);
+    dest[right-left] = '\0';
+    return dest;
+}
+
+
+
+/* ---------------------------------------------------------------------------
+ * Resolve /./ and /../ in a URI, returing a new, safe URI, or NULL if the URI
+ * is invalid/unsafe.
+ */
+static char *make_safe_uri(const char *uri)
+{
+    char **elements, **reassembly, *out;
+    int slashes, i, elem, reasm, urilen;
+
+    if (uri[0] != '/') return NULL;
+    urilen = strlen(uri);
+
+    /* count the slashes */
+    for (i=0, slashes=0; i<urilen; i++)
+        if (uri[i] == '/') slashes++;
+
+    /* make an array for the URI elements */
+    elements = (char**) xmalloc(sizeof(char*) * slashes);
+    for (i=0; i<slashes; i++) elements[i] = NULL;
+
+    /* split by slash */
+    elem = i = 0;
+    while (i < urilen) /* i is the left bound */
+    {
+        int j;
+
+        /* look for a non-slash */
+        for (; uri[i] == '/'; i++);
+
+        /* look for the next slash */
+        for (j=i+1; uri[j] != '/' && uri[j] != '\0'; j++);
+
+        elements[elem++] = split_string(uri, i, j);
+        i = j; /* iterate */
+    }
+
+    reassembly = (char**) xmalloc(sizeof(char*) * slashes);
+    for (i=0; i<slashes; i++) reassembly[i] = NULL;
+    reasm = 0;
+
+    /* process */
+    for (i=0; i<elem; i++)
+    {
+        if (strcmp(elements[i], ".") == 0)
+        { /* do nothing */ }
+        else if (strcmp(elements[i], "..") == 0)
+        {
+            /* try to backstep */
+            if (reasm == 0)
+            {
+                /* user walked out of wwwroot! unsafe uri! */
+                int j;
+                for (j=0; j<elem; j++)
+                    if (elements[j] != NULL) free(elements[j]);
+                free(elements);
+                free(reassembly);
+                return NULL;
+            }
+            /* else */
+            reasm--;
+            reassembly[reasm] = NULL;
+        }
+        else
+        {
+            /* plain copy */
+            reassembly[reasm++] = elements[i];
+        }
+    }
+
+    /* reassemble */
+    out = (char*) xmalloc(urilen+1);
+    out[0] = '\0';
+    
+    for (i=0; reassembly[i] != NULL; i++)
+    {
+        strcat(out, "/");
+        strcat(out, reassembly[i]);
+    }
+
+    out = (char*) xrealloc(out, strlen(out)+1);
+    debugf("`%s' -safe-> `%s'\n", uri, out);
+    return out;
 }
 
 
@@ -220,8 +306,8 @@ static void parse_mimetype_line(const char *line)
 
         mapping = (struct mime_mapping *)
             xmalloc(sizeof(struct mime_mapping));
-        split_string(&(mapping->mimetype), line, pad, bound1);
-        split_string(&(mapping->extension), line, lbound, rbound);
+        mapping->mimetype = split_string(line, pad, bound1);
+        mapping->extension = split_string(line, lbound, rbound);
 
         assert(strlen(mapping->mimetype) > 0);
         assert(strlen(mapping->extension) > 0);
@@ -711,7 +797,7 @@ static void default_reply(struct connection *conn,
 static char *parse_field(const struct connection *conn, const char *field)
 {
     unsigned int bound1, bound2;
-    char *pos, *buf;
+    char *pos;
 
     /* find start */
     pos = strstr(conn->request, field);
@@ -724,8 +810,7 @@ static char *parse_field(const struct connection *conn, const char *field)
         bound2 < conn->request_length; bound2++);
 
     /* copy to buffer */
-    split_string(&buf, conn->request, bound1, bound2);
-    return buf;
+    return split_string(conn->request, bound1, bound2);
 }
 
 
@@ -744,7 +829,7 @@ static void parse_request(struct connection *conn)
     for (bound1 = 0; bound1 < conn->request_length &&
         conn->request[bound1] != ' '; bound1++);
 
-    split_string(&(conn->method), conn->request, 0, bound1);
+    conn->method = split_string(conn->request, 0, bound1);
     strntoupper(conn->method, bound1);
 
     /* parse uri */
@@ -752,7 +837,7 @@ static void parse_request(struct connection *conn)
         conn->request[bound2] != ' ' &&
         conn->request[bound2] != '\r'; bound2++);
 
-    split_string(&(conn->uri), conn->request, bound1+1, bound2);
+    conn->uri = split_string(conn->request, bound1+1, bound2);
 
     /* parse referer, user_agent */
     conn->referer = parse_field(conn, "Referer: ");
@@ -766,29 +851,42 @@ static void parse_request(struct connection *conn)
  */
 static void process_get(struct connection *conn)
 {
-    char *decoded_url, *target, *tmp;
+    char *decoded_url, *safe_url, *target, *tmp;
     const char *mimetype = NULL;
     struct stat filestat;
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->uri);
-    /* FIXME: ensure this is a safe URL, i.e. no '../' */
-    if (decoded_url[strlen(decoded_url)-1] == '/')
+
+    /* make sure it's safe */
+    safe_url = make_safe_uri(decoded_url);
+    if (safe_url == NULL)
     {
-        asprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
+        default_reply(conn, 400, "Bad Request",
+            "You requested an invalid URI: %s", conn->uri);
+        return;
+    }
+    free(decoded_url);
+    decoded_url = NULL;
+
+    if (safe_url[strlen(safe_url)-1] == '/')
+    {
+        asprintf(&target, "%s%s%s", wwwroot, safe_url, index_name);
         mimetype = uri_content_type(index_name);
     }
     else
     {
-        asprintf(&target, "%s%s", wwwroot, decoded_url);
-        mimetype = uri_content_type(decoded_url);
+        asprintf(&target, "%s%s", wwwroot, safe_url);
+        mimetype = uri_content_type(safe_url);
     }
-    free(decoded_url);
-
-    debugf(">>>%s<<<\n", target);
-    free(target);
+    free(safe_url);
+    safe_url = NULL;
 
     conn->reply_file = fopen(target, "rb");
+    debugf("target = %s\n", target);
+    free(target);
+    target = NULL;
+
     if (conn->reply_file == NULL)
     {
         /* fopen() failed */
