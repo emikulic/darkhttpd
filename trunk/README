@@ -4,11 +4,8 @@ darkhttpd
 Compiling
 ---------
 
-On Solaris:
-	$ cc darkhttpd.c -lxnet -o darkhttpd
-
-Everywhere else:
-	$ cc darkhttpd.c -o darkhttpd
+Run make and follow the prompts:
+	$ make
 
 
 
@@ -22,7 +19,7 @@ Serve ~/public_html on port 8081:
 	$ ./darkhttpd ~/public_html --port 8081
 
 Only bind to one IP address (useful on multi-homed systems):
-	$ ./darkhttpd ~/public_html --addr 127.0.0.1
+	$ ./darkhttpd ~/public_html --addr 192.168.0.1
 
 Serve at most 4 simultaneous connections:
 	$ ./darkhttpd ~/public_html --maxconn 4
@@ -49,4 +46,5 @@ Use acceptfilter (FreeBSD only):
 	$ kldload accf_http
 	$ ./darkhttpd /var/www/htdocs --accf
 
-Commandline options can be combined.
+Commandline options can be combined:
+	$ ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
