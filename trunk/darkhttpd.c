@@ -41,6 +41,8 @@ static const int debug = 1;
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
+#include <sys/wait.h>
+#include <sys/param.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
@@ -250,7 +252,7 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static struct pidfh *pidfile = NULL;
-static int want_chroot = 0, want_accf = 0;
+static int want_chroot = 0, want_daemon = 0, want_accf = 0;
 static uint32_t num_requests = 0;
 static uint64_t total_in = 0, total_out = 0;
 
@@ -926,6 +928,10 @@ static void usage(void)
     "\t\tLocks server into wwwroot directory for added security.\n"
     "\n");
     printf(
+    "\t--daemon (default: don't daemonize)\n"
+    "\t\tDetach from the controlling terminal and run in the background.\n"
+    "\n");
+    printf(
     "\t--index filename (default: %s)\n" /* index_name */
     "\t\tDefault file to serve when a directory is requested.\n"
     "\n", index_name);
@@ -1025,6 +1031,10 @@ static void parse_commandline(const int argc, char *argv[])
         else if (strcmp(argv[i], "--chroot") == 0)
         {
             want_chroot = 1;
+        }
+        else if (strcmp(argv[i], "--daemon") == 0)
+        {
+            want_daemon = 1;
         }
         else if (strcmp(argv[i], "--index") == 0)
         {
@@ -2288,6 +2298,75 @@ static void httpd_poll(void)
 
 
 /* ---------------------------------------------------------------------------
+ * Daemonize helpers.
+ */
+#define PATH_DEVNULL "/dev/null"
+static int lifeline[2] = { -1, -1 };
+static int fd_null = -1;
+
+void
+daemonize_start(void)
+{
+   pid_t f, w;
+
+   if (pipe(lifeline) == -1)
+      err(1, "pipe(lifeline)");
+
+   fd_null = open(PATH_DEVNULL, O_RDWR, 0);
+   if (fd_null == -1)
+      err(1, "open(" PATH_DEVNULL ")");
+
+   f = fork();
+   if (f == -1)
+      err(1, "fork");
+   else if (f != 0) {
+      /* parent: wait for child */
+      char tmp[1];
+      int status;
+
+      if (close(lifeline[1]) == -1)
+         warn("close lifeline in parent");
+      read(lifeline[0], tmp, sizeof(tmp));
+      w = waitpid(f, &status, WNOHANG);
+      if (w == -1)
+         err(1, "waitpid");
+      else if (w == 0)
+         /* child is running happily */
+         exit(EXIT_SUCCESS);
+      else
+         /* child init failed, pass on its exit status */
+         exit(WEXITSTATUS(status));
+   }
+   /* else we are the child: continue initializing */
+}
+
+void
+daemonize_finish(void)
+{
+   if (fd_null == -1)
+      return; /* didn't daemonize_start() so we're not daemonizing */
+
+   if (setsid() == -1)
+      err(1, "setsid");
+   if (close(lifeline[0]) == -1)
+      warn("close read end of lifeline in child");
+   if (close(lifeline[1]) == -1)
+      warn("couldn't cut the lifeline");
+
+   /* close all our std fds */
+   if (dup2(fd_null, STDIN_FILENO) == -1)
+      warn("dup2(stdin)");
+   if (dup2(fd_null, STDOUT_FILENO) == -1)
+      warn("dup2(stdout)");
+   if (dup2(fd_null, STDERR_FILENO) == -1)
+      warn("dup2(stderr)");
+   if (fd_null > 2)
+      close(fd_null);
+}
+
+
+
+/* ---------------------------------------------------------------------------
  * Close all sockets and FILEs and exit.
  */
 static void
@@ -2314,18 +2393,6 @@ int main(int argc, char *argv[])
     xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", idletime);
     init_sockin();
 
-    /* create pidfile */
-    if (pidfile_name) {
-        pid_t otherpid;
-        pidfile = pidfile_open(pidfile_name, 0600, &otherpid);
-        if (pidfile == NULL) {
-            if (errno == EEXIST)
-                errx(1, "Daemon already running with PID %d", (int)otherpid);
-            else
-                err(1, "Can't create pidfile \"%s\"", pidfile_name);
-        }
-    }
-
     /* open logfile */
     if (logfile_name != NULL)
     {
@@ -2333,6 +2400,8 @@ int main(int argc, char *argv[])
         if (logfile == NULL)
             err(1, "opening logfile: fopen(\"%s\")", logfile_name);
     }
+
+    if (want_daemon) daemonize_start();
 
     /* signals */
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
@@ -2347,7 +2416,11 @@ int main(int argc, char *argv[])
     /* security */
     if (want_chroot)
     {
-        if (chroot(wwwroot) == -1) err(1, "chroot(\"%s\")", wwwroot);
+        tzset(); /* read /etc/localtime before we chroot */
+        if (chdir(wwwroot) == -1)
+            err(1, "chdir(%s)", wwwroot);
+        if (chroot(wwwroot) == -1)
+            err(1, "chroot(%s)", wwwroot);
         printf("chrooted to `%s'\n", wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
@@ -2362,9 +2435,20 @@ int main(int argc, char *argv[])
         printf("set uid to %d\n", drop_uid);
     }
 
-    /* FIXME: daemonize here */
+    /* create pidfile */
+    if (pidfile_name) {
+        pid_t otherpid;
+        pidfile = pidfile_open(pidfile_name, 0600, &otherpid);
+        if (pidfile == NULL) {
+            if (errno == EEXIST)
+                errx(1, "Daemon already running with PID %d", (int)otherpid);
+            else
+                err(1, "Can't create pidfile \"%s\"", pidfile_name);
+        }
+        pidfile_write(pidfile);
+    }
 
-    if (pidfile) pidfile_write(pidfile);
+    if (want_daemon) daemonize_finish();
 
     /* main loop */
     while (running) httpd_poll();
