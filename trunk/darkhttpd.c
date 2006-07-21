@@ -2057,14 +2057,17 @@ static ssize_t send_from_file(const int s, const int fd,
         fprintf(stderr, "premature eof on fd %d\n", fd);
         return -1;
     }
-    else if (numread != -1)
+    else if (numread == -1)
+    {
+        fprintf(stderr, "error reading on fd %d: %s", fd, strerror(errno));
+        return -1;
+    }
+    else if ((size_t)numread != amount)
     {
         fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
             numread, amount, fd);
         return -1;
     }
-    else if ((size_t)numread != amount)
-        return -1;
     else
         return send(s, buf, amount, 0);
 #endif
