@@ -1970,9 +1970,12 @@ static void poll_recv_request(struct connection *conn)
     total_in += recvd;
 
     /* process request if we have all of it */
-    if (conn->request_length > 4 &&
-        memcmp(conn->request+conn->request_length-4, "\r\n\r\n", 4) == 0)
-        process_request(conn);
+    if ((conn->request_length > 2) &&
+        (memcmp(conn->request+conn->request_length-2, "\n\n", 2) == 0))
+            process_request(conn);
+    else if ((conn->request_length > 4) &&
+        (memcmp(conn->request+conn->request_length-4, "\r\n\r\n", 4) == 0))
+            process_request(conn);
 
     /* die if it's too long */
     if (conn->request_length > MAX_REQUEST_LENGTH)
