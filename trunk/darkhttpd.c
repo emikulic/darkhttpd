@@ -33,6 +33,10 @@ static const int debug = 1;
 #include <sys/sendfile.h>
 #endif
 
+#ifdef __sun__
+#include <sys/sendfile.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -2041,7 +2045,7 @@ static ssize_t send_from_file(const int s, const int fd,
     }
     else return size;
 #else
-#ifdef __linux
+#if defined(__linux) || defined(__sun__)
     return sendfile(s, fd, &ofs, size);
 #else
     #define BUFSIZE 20000

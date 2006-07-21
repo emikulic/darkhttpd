@@ -20,7 +20,7 @@ bsd linux:
 	make darkhttpd
 
 solaris:
-	make darkhttpd LIBS=-lxnet
+	make darkhttpd LIBS="-lxnet -lsendfile"
 
 darkhttpd: darkhttpd.c
 	$(CC) $(CFLAGS) $(LIBS) darkhttpd.c -o darkhttpd
