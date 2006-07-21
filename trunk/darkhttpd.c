@@ -17,7 +17,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.2",
+    pkgname[]   = "darkhttpd/1.3",
     copyright[] = "copyright (c) 2003, 2004, 2006 Emil Mikulic",
     rcsid[]     = "$Id$";
 
@@ -2409,7 +2409,6 @@ pidfile_read(void)
 static void
 pidfile_create(void)
 {
-    struct stat sb;
     int error, fd;
     char pidstr[16];
     assert(pidfile_path != NULL);
