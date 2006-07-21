@@ -27,7 +27,7 @@ Serve at most 4 simultaneous connections:
 Log accesses to a file:
 	$ ./darkhttpd ~/public_html --log access.log
 
-Chroot for extra security (you usually have to be root to do this):
+Chroot for extra security (you need root privs for chroot):
 	$ ./darkhttpd /var/www/htdocs --chroot
 
 Use default.htm instead of index.html:
