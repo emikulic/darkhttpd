@@ -49,6 +49,7 @@ static const int debug = 1;
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <libutil.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -247,9 +248,13 @@ static int sockin = -1;             /* socket to accept connections from */
 static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
+static char *pidfile_name = NULL;   /* NULL = no pidfile */
+static struct pidfh *pidfile = NULL;
 static int want_chroot = 0, want_accf = 0;
 static uint32_t num_requests = 0;
 static uint64_t total_in = 0, total_out = 0;
+
+static int running = 1; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -923,13 +928,17 @@ static void usage(void)
     "\t\tParses specified file for extension-MIME associations.\n"
     "\n");
     printf(
-    "\t--uid uid, --gid gid\n"
+    "\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n"
+    "\n");
+    printf(
+    "\t--pidfile filename (default: no pidfile)\n"
+    "\t\tWrite PID to the specified file.\n"
     "\n");
 #ifdef __FreeBSD__
     printf(
-    "\t--accf\n"
-    "\t\tUse acceptfilter.\n"
+    "\t--accf (default: don't use acceptfilter)\n"
+    "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n"
     "\n");
 #endif
 }
@@ -1042,6 +1051,12 @@ static void parse_commandline(const int argc, char *argv[])
 
             if (g == NULL) errx(1, "no such gid: `%s'", argv[i]);
             drop_gid = g->gr_gid;
+        }
+        else if (strcmp(argv[i], "--pidfile") == 0)
+        {
+            if (++i >= argc)
+                errx(1, "missing filename after --pidfile");
+            pidfile_name = argv[i];
         }
         else if (strcmp(argv[i], "--accf") == 0)
         {
@@ -2233,7 +2248,12 @@ static void httpd_poll(void)
         else
             return;
     }
-    if (select_ret == -1) err(1, "select()");
+    if (select_ret == -1) {
+        if (errno == EINTR)
+            return; /* interrupted by signal */
+        else
+            err(1, "select() failed");
+    }
 
     /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
@@ -2262,44 +2282,11 @@ static void httpd_poll(void)
 /* ---------------------------------------------------------------------------
  * Close all sockets and FILEs and exit.
  */
-static void exit_quickly(int sig)
+static void
+stop_running(int sig)
 {
-    struct connection *conn, *next;
-    struct rusage r;
-    size_t i;
-
-    printf("\ncaught %s, cleaning up...", strsignal(sig)); fflush(stdout);
-    /* close and free connections */
-    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
-    {
-        LIST_REMOVE(conn, entries);
-        free_connection(conn);
-        free(conn);
-    }
-    xclose(sockin);
-    if (logfile != NULL) fclose(logfile);
-
-    /* free mime_map */
-    for (i=0; i<mime_map_size; i++)
-    {
-        free(mime_map[i].extension);
-        free(mime_map[i].mimetype);
-    }
-    free(mime_map);
-    free(keep_alive_field);
-    free(wwwroot);
-    printf("done!\n");
-
-    getrusage(RUSAGE_SELF, &r);
-    printf("CPU time used: %u.%02u user, %u.%02u system\n",
-        (unsigned int)r.ru_utime.tv_sec,
-            (unsigned int)(r.ru_utime.tv_usec/10000),
-        (unsigned int)r.ru_stime.tv_sec,
-            (unsigned int)(r.ru_stime.tv_usec/10000)
-    );
-    printf("Requests: %u\n", num_requests);
-    printf("Bytes: %llu in, %llu out\n", total_in, total_out);
-    exit(EXIT_SUCCESS);
+    running = 0;
+    fprintf(stderr, "\ncaught %s, stopping\n", strsignal(sig));
 }
 
 
@@ -2319,20 +2306,35 @@ int main(int argc, char *argv[])
     xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", idletime);
     init_sockin();
 
+    /* create pidfile */
+    if (pidfile_name) {
+        pid_t otherpid;
+        pidfile = pidfile_open(pidfile_name, 0600, &otherpid);
+        if (pidfile == NULL) {
+            if (errno == EEXIST)
+                errx(1, "Daemon already running with PID %d", (int)otherpid);
+            else
+                err(1, "Can't create pidfile \"%s\"", pidfile_name);
+        }
+    }
+
     /* open logfile */
     if (logfile_name != NULL)
     {
         logfile = fopen(logfile_name, "ab");
-        if (logfile == NULL) err(1, "fopen(\"%s\")", logfile_name);
+        if (logfile == NULL)
+            err(1, "opening logfile: fopen(\"%s\")", logfile_name);
     }
 
     /* signals */
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
         err(1, "signal(ignore SIGPIPE)");
-    if (signal(SIGINT, exit_quickly) == SIG_ERR)
+    if (signal(SIGINT, stop_running) == SIG_ERR)
         err(1, "signal(SIGINT)");
-    if (signal(SIGQUIT, exit_quickly) == SIG_ERR)
+    if (signal(SIGQUIT, stop_running) == SIG_ERR)
         err(1, "signal(SIGQUIT)");
+    if (signal(SIGTERM, stop_running) == SIG_ERR)
+        err(1, "signal(SIGTERM)");
 
     /* security */
     if (want_chroot)
@@ -2352,9 +2354,59 @@ int main(int argc, char *argv[])
         printf("set uid to %d\n", drop_uid);
     }
 
-    for (;;) httpd_poll();
+    /* FIXME: daemonize here */
 
-    return EXIT_FAILURE; /* unreachable */
+    if (pidfile) pidfile_write(pidfile);
+
+    /* main loop */
+    while (running) httpd_poll();
+
+    /* clean exit */
+    pidfile_remove(pidfile);
+
+    /* close and free connections */
+    {
+        struct connection *conn, *next;
+
+        LIST_FOREACH_SAFE(conn, &connlist, entries, next)
+        {
+            LIST_REMOVE(conn, entries);
+            free_connection(conn);
+            free(conn);
+        }
+        xclose(sockin);
+        if (logfile != NULL) fclose(logfile);
+    }
+
+    /* free the mallocs */
+    {
+        size_t i;
+        for (i=0; i<mime_map_size; i++)
+        {
+            free(mime_map[i].extension);
+            free(mime_map[i].mimetype);
+        }
+        free(mime_map);
+        free(keep_alive_field);
+        free(wwwroot);
+    }
+
+    /* usage stats */
+    {
+        struct rusage r;
+
+        getrusage(RUSAGE_SELF, &r);
+        printf("CPU time used: %u.%02u user, %u.%02u system\n",
+            (unsigned int)r.ru_utime.tv_sec,
+                (unsigned int)(r.ru_utime.tv_usec/10000),
+            (unsigned int)r.ru_stime.tv_sec,
+                (unsigned int)(r.ru_stime.tv_usec/10000)
+        );
+        printf("Requests: %u\n", num_requests);
+        printf("Bytes: %llu in, %llu out\n", total_in, total_out);
+    }
+
+    return (0);
 }
 
 /* vim:set tabstop=4 shiftwidth=4 expandtab tw=78: */
