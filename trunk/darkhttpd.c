@@ -51,7 +51,6 @@ static const int debug = 1;
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
-#include <libutil.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -69,37 +68,14 @@ static const int debug = 1;
 #define INADDR_NONE -1
 #endif
 
-
-
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
 #include <err.h>
 #else
-/* ---------------------------------------------------------------------------
- * errx - prints "error: [...]\n" to stderr and exit()s with [code]
- *
- * Replacement for the BSD errx() which is usually in <err.h>
+/* err - prints "error: format: strerror(errno)" to stderr and exit()s with
+ * the given code.
  */
-static void errx(const int code, const char *format, ...)
-{
-   va_list va;
-
-   va_start(va, format);
-   fprintf(stderr, "error: ");
-   vfprintf(stderr, format, va);
-   fprintf(stderr, "\n");
-   va_end(va);
-
-   exit(code);
-}
-
-
-
-/* ---------------------------------------------------------------------------
- * err - prints "error: [...]: strerror\n" to stderr and exit()s with [code]
- *
- * Replacement for the BSD err() which is usually in <err.h>
- */
-static void err(const int code, const char *format, ...)
+static void
+err(const int code, const char *format, ...)
 {
    va_list va;
 
@@ -108,12 +84,36 @@ static void err(const int code, const char *format, ...)
    vfprintf(stderr, format, va);
    fprintf(stderr, ": %s\n", strerror(errno));
    va_end(va);
-
    exit(code);
 }
+
+/* errx - err without the strerror */
+static void
+errx(const int code, const char *format, ...)
+{
+   va_list va;
+
+   va_start(va, format);
+   fprintf(stderr, "error: ");
+   vfprintf(stderr, format, va);
+   fprintf(stderr, "\n");
+   va_end(va);
+   exit(code);
+}
+
+/* warn - err without the exit */
+static void
+warn(const char *format, ...)
+{
+   va_list va;
+
+   va_start(va, format);
+   fprintf(stderr, "warning: ");
+   vfprintf(stderr, format, va);
+   fprintf(stderr, ": %s\n", strerror(errno));
+   va_end(va);
+}
 #endif
-
-
 
 /* ---------------------------------------------------------------------------
  * LIST_* macros taken from FreeBSD's src/sys/sys/queue.h,v 1.56
@@ -122,7 +122,6 @@ static void err(const int code, const char *format, ...)
  *
  * Under a BSD license.
  */
-
 #define LIST_HEAD(name, type)                                           \
 struct name {                                                           \
         struct type *lh_first;  /* first element */                     \
