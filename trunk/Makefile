@@ -15,7 +15,7 @@ all:
 	@echo "+----- ---- --- -- -"
 
 bsd:
-	make darkhttpd LIBS="-lutil"
+	make darkhttpd
 
 linux:
 	make darkhttpd
