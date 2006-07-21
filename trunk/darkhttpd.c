@@ -68,6 +68,10 @@ static const int debug = 1;
 #define INADDR_NONE -1
 #endif
 
+#if defined(O_EXCL) && !defined(O_EXLOCK)
+#define O_EXLOCK O_EXCL
+#endif
+
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
 #include <err.h>
 #else
@@ -250,7 +254,6 @@ static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
-static struct pidfh *pidfile = NULL;
 static int want_chroot = 0, want_daemon = 0, want_accf = 0;
 static uint32_t num_requests = 0;
 static uint64_t total_in = 0, total_out = 0;
@@ -2363,9 +2366,83 @@ daemonize_finish(void)
       close(fd_null);
 }
 
-
-
 /* ---------------------------------------------------------------------------
+ * Pidfile helpers, based on FreeBSD src/lib/libutil/pidfile.c,v 1.3
+ * Original was copyright (c) 2005 Pawel Jakub Dawidek <pjd@FreeBSD.org>
+ */
+static int pidfile_fd = -1;
+#define PIDFILE_MODE 0600
+
+static void
+pidfile_remove(void)
+{
+    if (unlink(pidfile_name) == -1)
+        err(1, "unlink(pidfile) failed");
+ /* if (flock(pidfile_fd, LOCK_UN) == -1)
+        err(1, "unlock(pidfile) failed"); */
+    xclose(pidfile_fd);
+    pidfile_fd = -1;
+}
+
+static int
+pidfile_read(void)
+{
+    char buf[16], *endptr;
+    int fd, i, pid;
+
+    fd = open(pidfile_name, O_RDONLY);
+    if (fd == -1)
+        err(1, " after create failed");
+
+    i = read(fd, buf, sizeof(buf) - 1);
+    if (i == -1)
+        err(1, "read from pidfile failed");
+    xclose(fd);
+    buf[i] = '\0';
+
+    pid = (int)strtoul(buf, &endptr, 10);
+    if (endptr != &buf[i])
+        err(1, "invalid pidfile contents: \"%s\"", buf);
+    return (pid);
+}
+
+static void
+pidfile_create(void)
+{
+    struct stat sb;
+    int error, fd;
+    char pidstr[16];
+    assert(pidfile_path != NULL);
+
+    /* Open the PID file and obtain exclusive lock. */
+    fd = open(pidfile_name,
+        O_WRONLY | O_CREAT | O_EXLOCK | O_TRUNC | O_NONBLOCK, PIDFILE_MODE);
+    if (fd == -1) {
+        if ((errno == EWOULDBLOCK) || (errno == EEXIST))
+            errx(1, "daemon already running with PID %d", pidfile_read());
+        else
+            err(1, "can't create pidfile %s", pidfile_name);
+    }
+    pidfile_fd = fd;
+
+    if (ftruncate(fd, 0) == -1) {
+        error = errno;
+        pidfile_remove();
+        errno = error;
+        err(1, "ftruncate() failed");
+    }
+
+    snprintf(pidstr, sizeof(pidstr), "%u", getpid());
+    if (pwrite(fd, pidstr, strlen(pidstr), 0) != (ssize_t)strlen(pidstr)) {
+        error = errno;
+        pidfile_remove();
+        errno = error;
+        err(1, "pwrite() failed");
+    }
+}
+
+/* end of pidfile helpers.
+ * ---------------------------------------------------------------------------
  * Close all sockets and FILEs and exit.
  */
 static void
@@ -2375,12 +2452,11 @@ stop_running(int sig)
     fprintf(stderr, "\ncaught %s, stopping\n", strsignal(sig));
 }
 
-
-
 /* ---------------------------------------------------------------------------
  * Execution starts here.
  */
-int main(int argc, char *argv[])
+int
+main(int argc, char **argv)
 {
     printf("%s, %s.\n", pkgname, copyright);
     parse_default_extension_map();
@@ -2435,17 +2511,7 @@ int main(int argc, char *argv[])
     }
 
     /* create pidfile */
-    if (pidfile_name) {
-        pid_t otherpid;
-        pidfile = pidfile_open(pidfile_name, 0600, &otherpid);
-        if (pidfile == NULL) {
-            if (errno == EEXIST)
-                errx(1, "Daemon already running with PID %d", (int)otherpid);
-            else
-                err(1, "Can't create pidfile \"%s\"", pidfile_name);
-        }
-        pidfile_write(pidfile);
-    }
+    if (pidfile_name) pidfile_create();
 
     if (want_daemon) daemonize_finish();
 
@@ -2453,7 +2519,9 @@ int main(int argc, char *argv[])
     while (running) httpd_poll();
 
     /* clean exit */
-    pidfile_remove(pidfile);
+    xclose(sockin);
+    if (logfile != NULL) fclose(logfile);
+    if (pidfile_name) pidfile_remove();
 
     /* close and free connections */
     {
@@ -2465,8 +2533,6 @@ int main(int argc, char *argv[])
             free_connection(conn);
             free(conn);
         }
-        xclose(sockin);
-        if (logfile != NULL) fclose(logfile);
     }
 
     /* free the mallocs */
