@@ -264,17 +264,23 @@ static gid_t drop_gid = INVALID_GID;
 
 /* Default mimetype mappings - make sure this array is NULL terminated. */
 static const char *default_extension_map[] = {
-    "text/html          html htm",
-    "image/png          png",
-    "image/jpeg         jpeg jpe jpg",
-    "image/gif          gif",
-    "audio/mpeg         mp2 mp3 mpga",
-    "application/ogg    ogg",
-    "text/css           css",
-    "text/plain         txt asc",
-    "text/xml           xml",
-    "video/mpeg         mpeg mpe mpg",
-    "video/x-msvideo    avi",
+    "application/ogg"      " ogg",
+    "application/pdf"      " pdf",
+    "application/xml"      " xsl xml",
+    "application/xml-dtd"  " dtd",
+    "application/xslt+xml" " xslt",
+    "application/zip"      " zip",
+    "audio/mpeg"           " mp2 mp3 mpga",
+    "image/gif"            " gif",
+    "image/jpeg"           " jpeg jpe jpg",
+    "image/png"            " png",
+    "text/css"             " css",
+    "text/html"            " html htm",
+    "text/javascript"      " js",
+    "text/plain"           " txt asc",
+    "video/mpeg"           " mpeg mpe mpg",
+    "video/quicktime"      " qt mov",
+    "video/x-msvideo"      " avi",
     NULL
 };
 
@@ -933,7 +939,9 @@ static void usage(void)
     "\n");
     printf(
     "\t--pidfile filename (default: no pidfile)\n"
-    "\t\tWrite PID to the specified file.\n"
+    "\t\tWrite PID to the specified file.  Note that if you are\n"
+    "\t\tusing --chroot, then the pidfile must be relative to,\n"
+    "\t\tand inside the wwwroot.\n"
     "\n");
 #ifdef __FreeBSD__
     printf(
