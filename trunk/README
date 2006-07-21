@@ -46,5 +46,8 @@ Use acceptfilter (FreeBSD only):
 	$ kldload accf_http
 	$ ./darkhttpd /var/www/htdocs --accf
 
+Run in the background and create a pidfile:
+	$ ./darkhttpd /var/www/htdocs --pidfile /var/run/httpd.pid --daemon
+
 Commandline options can be combined:
 	$ ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
