@@ -16,7 +16,10 @@ all:
 	@echo "|     $(TARGETS)"
 	@echo "+----- ---- --- -- -"
 
-bsd linux:
+bsd:
+	make darkhttpd LIBS="-lutil"
+
+linux:
 	make darkhttpd
 
 solaris:
