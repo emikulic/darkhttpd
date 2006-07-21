@@ -871,7 +871,7 @@ static void init_sockin(void)
     {
 #if defined(__FreeBSD__)
         struct accept_filter_arg filt = {"httpready", ""};
-        if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER,
+        if (setsockopt(sockin, SOL_SOCKET, SO_ACCEPTFILTER,
             &filt, sizeof(filt)) == -1)
             fprintf(stderr, "cannot enable acceptfilter: %s\n",
                 strerror(errno));
