@@ -2177,8 +2177,12 @@ static void log_connection(const struct connection *conn)
 {
     struct in_addr inaddr;
 
-    if (logfile == NULL) return;
-    if (conn->http_code == 0) return; /* invalid - died in request */
+    if (logfile == NULL)
+        return;
+    if (conn->http_code == 0)
+        return; /* invalid - died in request */
+    if (conn->method == NULL)
+        return; /* invalid - didn't parse - maybe too long */
 
     /* Separated by tabs:
      * time client_ip method uri http_code bytes_sent "referer" "user-agent"
