@@ -46,6 +46,8 @@ static char * const tests[] = {
     "/abc/../def/.././../", NULL,
     "/a/b/c/../../d/", "/a/d/",
     "/a/b/../../../c", NULL,
+    /* don't forget consolidate_slashes */
+    "//a///b////c/////", "/a/b/c/",
     NULL
 };
 
