@@ -2279,18 +2279,8 @@ static void httpd_poll(void)
         switch (conn->state)
         {
         case DONE:
-            /* clean out stale connections while we're at it */
-            if (conn->conn_close)
-            {
-                LIST_REMOVE(conn, entries);
-                free_connection(conn);
-                free(conn);
-                break;
-            }
-            /* else */
-            recycle_connection(conn);
-            /* And enqueue as RECV_REQUEST. */
-            /* FALLTHROUGH */
+            /* do nothing */
+            break;
 
         case RECV_REQUEST:
             MAX_FD_SET(conn->socket, &recv_set);
@@ -2328,26 +2318,45 @@ static void httpd_poll(void)
     /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
 
-    LIST_FOREACH(conn, &connlist, entries)
-    switch (conn->state)
-    {
-    case RECV_REQUEST:
-        if (FD_ISSET(conn->socket, &recv_set)) poll_recv_request(conn);
-        break;
+    LIST_FOREACH(conn, &connlist, entries) {
+        switch (conn->state)
+        {
+        case RECV_REQUEST:
+            if (FD_ISSET(conn->socket, &recv_set)) poll_recv_request(conn);
+            break;
 
-    case SEND_HEADER:
-        if (FD_ISSET(conn->socket, &send_set)) poll_send_header(conn);
-        break;
+        case SEND_HEADER:
+            if (FD_ISSET(conn->socket, &send_set)) poll_send_header(conn);
+            break;
 
-    case SEND_REPLY:
-        if (FD_ISSET(conn->socket, &send_set)) poll_send_reply(conn);
-        break;
+        case SEND_REPLY:
+            if (FD_ISSET(conn->socket, &send_set)) poll_send_reply(conn);
+            break;
 
-    case DONE:
-        /* do nothing (FIXME) */
-        break;
+        case DONE:
+            /* (handled later; ignore for now as it's a valid state) */
+            break;
 
-    default: errx(1, "invalid state");
+        default: errx(1, "invalid state");
+        }
+
+        if (conn->state == DONE) {
+            /* clean out finished connection */
+            if (conn->conn_close)
+            {
+                LIST_REMOVE(conn, entries);
+                free_connection(conn);
+                free(conn);
+                break;
+            }
+            /* else */
+            recycle_connection(conn);
+
+            /* and go right back to recv_request without going through
+             * select() again.
+             */
+            poll_recv_request(conn);
+        }
     }
 }
 
