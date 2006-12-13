@@ -235,7 +235,10 @@ size_t longest_ext = 0;
 static int idletime = 60;
 static char *keep_alive_field = NULL;
 
-
+/* Time is cached in the event loop to avoid making an excessive number of
+ * gettimeofday() calls.
+ */
+static time_t now;
 
 /* To prevent a malformed request from eating up too much memory, die once the
  * request exceeds this many bytes:
@@ -1123,7 +1126,7 @@ static struct connection *new_connection(void)
 
     conn->socket = -1;
     conn->client = INADDR_ANY;
-    conn->last_active = time(NULL);
+    conn->last_active = now;
     conn->request = NULL;
     conn->request_length = 0;
     conn->method = NULL;
@@ -1279,7 +1282,7 @@ static void poll_check_timeout(struct connection *conn)
 {
     if (idletime > 0) /* optimised away by compiler */
     {
-        if (time(NULL) - conn->last_active >= idletime)
+        if (now - conn->last_active >= idletime)
         {
             if (debug) printf("poll_check_timeout(%d) caused closure\n",
                 conn->socket);
@@ -1298,9 +1301,9 @@ static void poll_check_timeout(struct connection *conn)
 #define DATE_LEN 30 /* strlen("Fri, 28 Feb 2003 00:02:08 GMT")+1 */
 static char *rfc1123_date(char *dest, const time_t when)
 {
-    time_t now = when;
+    time_t when_copy = when;
     if (strftime(dest, DATE_LEN,
-        "%a, %d %b %Y %H:%M:%S GMT", gmtime(&now) ) == 0)
+        "%a, %d %b %Y %H:%M:%S GMT", gmtime(&when_copy) ) == 0)
             errx(1, "strftime() failed [%s]", dest);
     return dest;
 }
@@ -1360,7 +1363,7 @@ static void default_reply(struct connection *conn,
     va_end(va);
 
     /* Only really need to calculate the date once. */
-    (void)rfc1123_date(date, time(NULL));
+    rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
      "<html><head><title>%d %s</title></head><body>\n"
@@ -1402,7 +1405,7 @@ static void redirect(struct connection *conn, const char *format, ...)
     va_end(va);
 
     /* Only really need to calculate the date once. */
-    (void)rfc1123_date(date, time(NULL));
+    rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
      "<html><head><title>301 Moved Permanently</title></head><body>\n"
@@ -1744,7 +1747,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
     free(list);
     free(spaces);
 
-    (void)rfc1123_date(date, time(NULL));
+    rfc1123_date(date, now);
     append(listing,
      "</pre></tt>\n"
      "<hr>\n"
@@ -1921,7 +1924,7 @@ static void process_get(struct connection *conn)
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname, keep_alive(conn),
+            rfc1123_date(date, now), pkgname, keep_alive(conn),
             conn->reply_length, from, to, filestat.st_size,
             mimetype, lastmod
         );
@@ -1944,7 +1947,7 @@ static void process_get(struct connection *conn)
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
-            rfc1123_date(date, time(NULL)), pkgname, keep_alive(conn),
+            rfc1123_date(date, now), pkgname, keep_alive(conn),
             conn->reply_length, mimetype, lastmod
         );
         conn->http_code = 200;
@@ -2027,7 +2030,7 @@ static void poll_recv_request(struct connection *conn)
         conn->state = DONE;
         return;
     }
-    conn->last_active = time(NULL);
+    conn->last_active = now;
     #undef BUFSIZE
 
     /* append to conn->request */
@@ -2074,7 +2077,7 @@ static void poll_send_header(struct connection *conn)
 
     sent = send(conn->socket, conn->header + conn->header_sent,
         conn->header_length - conn->header_sent, 0);
-    conn->last_active = time(NULL);
+    conn->last_active = now;
     if (debug) printf("poll_send_header(%d) sent %d bytes\n",
         conn->socket, (int)sent);
 
@@ -2188,7 +2191,7 @@ static void poll_send_reply(struct connection *conn)
             (off_t)(conn->reply_start + conn->reply_sent),
             conn->reply_length - conn->reply_sent);
     }
-    conn->last_active = time(NULL);
+    conn->last_active = now;
     if (debug) printf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
         conn->socket, (int)sent, (int)conn->reply_start,
         (int)conn->reply_sent,
@@ -2246,7 +2249,7 @@ static void log_connection(const struct connection *conn)
     inaddr.s_addr = conn->client;
 
     fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\t\"%s\"\t\"%s\"\n",
-        (unsigned long int)time(NULL), inet_ntoa(inaddr),
+        (unsigned long int)now, inet_ntoa(inaddr),
         conn->method, conn->uri,
         conn->http_code, conn->total_sent,
         (conn->referer == NULL)?"":conn->referer,
@@ -2323,6 +2326,9 @@ static void httpd_poll(void)
         else
             err(1, "select() failed");
     }
+
+    /* update time */
+    now = time(NULL);
 
     /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
