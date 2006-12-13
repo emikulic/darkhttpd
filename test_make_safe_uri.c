@@ -9,28 +9,21 @@ test(const char *input, const char *expected)
     char *out = make_safe_uri(tmp);
 
     if (expected == NULL) {
-        if (out == NULL) {
+        if (out == NULL)
             printf("PASS: \"%s\" is unsafe\n", input);
-            return;
-        }
-        else {
+        else
             printf("FAIL: \"%s\" is unsafe, but got \"%s\"\n",
                 input, out);
-            return;
-        }
     }
-
-    if (out == NULL) {
+    else if (out == NULL)
         printf("FAIL: \"%s\" should become \"%s\", got unsafe\n",
             input, expected);
-        return;
-    }
-
-    if (strcmp(out, expected) == 0)
+    else if (strcmp(out, expected) == 0)
         printf("PASS: \"%s\" => \"%s\"\n", input, out);
     else
         printf("FAIL: \"%s\" => \"%s\", expecting \"%s\"\n",
             input, out, expected);
+    free(tmp);
 }
 
 static char * const tests[] = {
