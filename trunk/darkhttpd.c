@@ -866,6 +866,16 @@ static void init_sockin(void)
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
 
+#ifdef TORTURE
+    /* torture: cripple the kernel-side send buffer so we can only squeeze out
+     * one byte at a time (this is for debugging)
+     */
+    sockopt = 1;
+    if (setsockopt(sockin, SOL_SOCKET, SO_SNDBUF,
+            &sockopt, sizeof(sockopt)) == -1)
+        err(1, "setsockopt(SO_SNDBUF)");
+#endif
+
     /* bind socket */
     addrin.sin_family = (u_char)PF_INET;
     addrin.sin_port = htons(bindport);
