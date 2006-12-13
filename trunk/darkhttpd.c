@@ -458,10 +458,15 @@ static void appendf(struct apbuf *buf, const char *format, ...)
 /* ---------------------------------------------------------------------------
  * Make the specified socket non-blocking.
  */
-static void nonblock_socket(const int sock)
+static void
+nonblock_socket(const int sock)
 {
-    assert(sock != -1);
-    if (fcntl(sock, F_SETFL, O_NONBLOCK) == -1)
+    int flags = fcntl(sock, F_GETFL, NULL);
+
+    if (flags == -1)
+        err(1, "fcntl(F_GETFL)");
+    flags |= O_NONBLOCK;
+    if (fcntl(sock, F_SETFL, flags) == -1)
         err(1, "fcntl() to set O_NONBLOCK");
 }
 
