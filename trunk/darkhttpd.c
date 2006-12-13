@@ -298,6 +298,7 @@ static const char default_mimetype[] = "application/octet-stream";
 
 /* Prototypes. */
 static void poll_recv_request(struct connection *conn);
+static void poll_send_header(struct connection *conn);
 
 
 
@@ -1175,7 +1176,9 @@ static void accept_connection(void)
         inet_ntoa(addrin.sin_addr),
         ntohs(addrin.sin_port) );
 
-    /* try to read straight away rather than going through select() */
+    /* try to read straight away rather than going through another iteration
+     * of the select() loop.
+     */
     poll_recv_request(conn);
 }
 
@@ -1996,6 +1999,7 @@ static void poll_recv_request(struct connection *conn)
     char buf[BUFSIZE];
     ssize_t recvd;
 
+    assert(conn->state == RECV_REQUEST);
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
     if (debug) printf("poll_recv_request(%d) got %d bytes\n",
         conn->socket, (int)recvd);
@@ -2038,6 +2042,12 @@ static void poll_recv_request(struct connection *conn)
             "Your request was dropped because it was too long.");
         conn->state = SEND_HEADER;
     }
+
+    /* if we've moved on to the next state, try to send right away, instead of
+     * going through another iteration of the select() loop.
+     */
+    if (conn->state == SEND_HEADER)
+        poll_send_header(conn);
 }
 
 
@@ -2049,6 +2059,7 @@ static void poll_send_header(struct connection *conn)
 {
     ssize_t sent;
 
+    assert(conn->state == SEND_HEADER);
     assert(conn->header_length == strlen(conn->header));
 
     sent = send(conn->socket, conn->header + conn->header_sent,
@@ -2060,6 +2071,10 @@ static void poll_send_header(struct connection *conn)
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
     {
+        if ((sent == -1) && (errno == EAGAIN)) {
+            if (debug) printf("poll_send_header would have blocked\n");
+            return;
+        }
         if (debug && (sent == -1))
             printf("send(%d) error: %s\n", conn->socket, strerror(errno));
         conn->conn_close = 1;
