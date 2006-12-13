@@ -1316,10 +1316,8 @@ static char *urldecode(const char *url)
             out[pos++] = url[i];
         }
     }
-    out[pos] = 0;
-
-    out = xrealloc(out, strlen(out)+1);  /* dealloc what we don't need */
-    return out;
+    out[pos] = '\0';
+    return (out);
 }
 
 
@@ -1769,6 +1767,7 @@ static void process_get(struct connection *conn)
     if (make_safe_uri(decoded_url) == NULL) {
         default_reply(conn, 400, "Bad Request",
             "You requested an invalid URI: %s", conn->uri);
+        free(decoded_url);
         return;
     }
 
