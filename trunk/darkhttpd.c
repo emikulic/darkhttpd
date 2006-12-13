@@ -44,6 +44,7 @@ static const int debug = 1;
 #include <sys/wait.h>
 #include <sys/param.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <ctype.h>
@@ -871,6 +872,14 @@ static void init_sockin(void)
     if (setsockopt(sockin, SOL_SOCKET, SO_REUSEADDR,
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
+
+#if 0
+    /* disable Nagle since we buffer everything ourselves */
+    sockopt = 1;
+    if (setsockopt(sockin, IPPROTO_TCP, TCP_NODELAY,
+            &sockopt, sizeof(sockopt)) == -1)
+        err(1, "setsockopt(TCP_NODELAY)");
+#endif
 
 #ifdef TORTURE
     /* torture: cripple the kernel-side send buffer so we can only squeeze out
