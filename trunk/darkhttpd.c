@@ -296,6 +296,9 @@ static const char default_mimetype[] = "application/octet-stream";
 #define keep_alive(conn) ((conn)->conn_close ? \
     "Connection: close\r\n" : keep_alive_field)
 
+/* Prototypes. */
+static void poll_recv_request(struct connection *conn);
+
 
 
 /* ---------------------------------------------------------------------------
@@ -1171,6 +1174,9 @@ static void accept_connection(void)
     if (debug) printf("accepted connection from %s:%u\n",
         inet_ntoa(addrin.sin_addr),
         ntohs(addrin.sin_port) );
+
+    /* try to read straight away rather than going through select() */
+    poll_recv_request(conn);
 }
 
 
@@ -1995,9 +2001,14 @@ static void poll_recv_request(struct connection *conn)
         conn->socket, (int)recvd);
     if (recvd <= 0)
     {
-        if (recvd == -1)
+        if (recvd == -1) {
+            if (errno == EAGAIN) {
+                if (debug) printf("poll_recv_request would have blocked\n");
+                return;
+            }
             if (debug) printf("recv(%d) error: %s\n",
                 conn->socket, strerror(errno));
+        }
         conn->conn_close = 1;
         conn->state = DONE;
         return;
