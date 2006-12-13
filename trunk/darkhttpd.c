@@ -520,31 +520,38 @@ static void consolidate_slashes(char *s)
 
 
 /* ---------------------------------------------------------------------------
- * Resolve /./ and /../ in a URI, returning a new, safe URI, or NULL if the
- * URI is invalid/unsafe.  Returned buffer needs to be deallocated.
+ * Resolve /./ and /../ in a URI, in-place.  Returns NULL if the URI is
+ * invalid/unsafe, or the original buffer if successful.
  */
 static char *make_safe_uri(char *uri)
 {
-    char **elem, *out;
-    unsigned int slashes = 0, elements = 0;
+    struct {
+        char *start;
+        size_t len;
+    } *chunks;
+    unsigned int num_slashes, num_chunks;
     size_t urilen, i, j, pos;
+    int ends_in_slash;
 
     assert(uri != NULL);
     if (uri[0] != '/') return NULL;
     consolidate_slashes(uri);
     urilen = strlen(uri);
+    if (urilen > 0)
+        ends_in_slash = (uri[urilen-1] == '/');
+    else
+        ends_in_slash = 1;
 
     /* count the slashes */
-    for (i=0, slashes=0; i<urilen; i++)
-        if (uri[i] == '/') slashes++;
+    for (i=0, num_slashes=0; i<urilen; i++)
+        if (uri[i] == '/') num_slashes++;
 
     /* make an array for the URI elements */
-    elem = xmalloc(sizeof(char*) * slashes);
-    for (i=0; i<slashes; i++) elem[i] = NULL;
+    chunks = xmalloc(sizeof(*chunks) * num_slashes);
 
-    /* split by slashes and build elem[] array */
-    for (i=1; i<urilen;)
-    {
+    /* split by slashes and build chunks array */
+    num_chunks = 0;
+    for (i=1; i<urilen;) {
         /* look for the next slash */
         for (j=i; j<urilen && uri[j] != '/'; j++)
             ;
@@ -552,53 +559,42 @@ static char *make_safe_uri(char *uri)
         /* process uri[i,j) */
         if ((j == i+1) && (uri[i] == '.'))
             /* "." */;
-        else if ((j == i+2) && (uri[i] == '.') && (uri[i+1] == '.'))
-        {
+        else if ((j == i+2) && (uri[i] == '.') && (uri[i+1] == '.')) {
             /* ".." */
-            if (elements == 0)
-            {
-                /* unsafe string so free elem[]; all its elements are free at
-                 * this point.
-                 */
-                free(elem);
-                return NULL;
-            }
-            else
-            {
-                elements--;
-                free(elem[elements]);
-            }
+            if (num_chunks == 0) {
+                /* unsafe string so free chunks */
+                free(chunks);
+                return (NULL);
+            } else
+                num_chunks--;
+        } else {
+            chunks[num_chunks].start = uri+i;
+            chunks[num_chunks].len = j-i;
+            num_chunks++;
         }
-        else elem[elements++] = split_string(uri, i, j);
 
         i = j + 1; /* uri[j] is a slash - move along one */
     }
 
-    /* reassemble */
-    out = xmalloc(urilen+1); /* it won't expand */
+    /* reassemble in-place */
     pos = 0;
-    for (i=0; i<elements; i++)
-    {
-        size_t delta = strlen(elem[i]);
-
+    for (i=0; i<num_chunks; i++) {
         assert(pos <= urilen);
-        out[pos++] = '/';
+        uri[pos++] = '/';
 
-        assert(pos+delta <= urilen);
-        memcpy(out+pos, elem[i], delta);
-        free(elem[i]);
-        pos += delta;
+        assert(pos + chunks[i].len <= urilen);
+        assert(uri + pos <= chunks[i].start);
+
+        if (uri+pos < chunks[i].start)
+            memmove(uri+pos, chunks[i].start, chunks[i].len);
+        pos += chunks[i].len;
     }
-    free(elem);
+    free(chunks);
 
-    if ((elements == 0) || (uri[urilen-1] == '/')) out[pos++] = '/';
+    if (ends_in_slash) uri[pos++] = '/';
     assert(pos <= urilen);
-    out[pos] = '\0';
-
-    /* shorten buffer if necessary */
-    if (pos != urilen) out = xrealloc(out, strlen(out)+1);
-
-    return out;
+    uri[pos] = '\0';
+    return uri;
 }
 
 
@@ -1761,7 +1757,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
  */
 static void process_get(struct connection *conn)
 {
-    char *decoded_url, *safe_url, *target, *if_mod_since;
+    char *decoded_url, *target, *if_mod_since;
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
     struct stat filestat;
@@ -1770,36 +1766,33 @@ static void process_get(struct connection *conn)
     decoded_url = urldecode(conn->uri);
 
     /* make sure it's safe */
-    safe_url = make_safe_uri(decoded_url);
-    free(decoded_url);
-    if (safe_url == NULL)
-    {
+    if (make_safe_uri(decoded_url) == NULL) {
         default_reply(conn, 400, "Bad Request",
             "You requested an invalid URI: %s", conn->uri);
         return;
     }
 
     /* does it end in a slash? serve up url/index_name */
-    if (safe_url[strlen(safe_url)-1] == '/')
+    if (decoded_url[strlen(decoded_url)-1] == '/')
     {
-        xasprintf(&target, "%s%s%s", wwwroot, safe_url, index_name);
+        xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
         if (!file_exists(target))
         {
             free(target);
-            xasprintf(&target, "%s%s", wwwroot, safe_url);
+            xasprintf(&target, "%s%s", wwwroot, decoded_url);
             generate_dir_listing(conn, target);
             free(target);
-            free(safe_url);
+            free(decoded_url);
             return;
         }
         mimetype = uri_content_type(index_name);
     }
     else /* points to a file */
     {
-        xasprintf(&target, "%s%s", wwwroot, safe_url);
-        mimetype = uri_content_type(safe_url);
+        xasprintf(&target, "%s%s", wwwroot, decoded_url);
+        mimetype = uri_content_type(decoded_url);
     }
-    free(safe_url);
+    free(decoded_url);
     if (debug) printf("uri=%s, target=%s, content-type=%s\n",
         conn->uri, target, mimetype);
 
@@ -2076,7 +2069,7 @@ static void poll_send_header(struct connection *conn)
 
 /* ---------------------------------------------------------------------------
  * Send chunk on socket <s> from FILE *fp, starting at <ofs> and of size
- * <size>.  Use sendfile() is possible since it's zero-copy on some platforms.
+ * <size>.  Use sendfile() if possible since it's zero-copy on some platforms.
  * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
  * read error.
  */
