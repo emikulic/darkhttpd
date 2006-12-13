@@ -1276,7 +1276,7 @@ static char *rfc1123_date(char *dest, const time_t when)
 {
     time_t now = when;
     if (strftime(dest, DATE_LEN,
-        "%a, %d %b %Y %H:%M:%S %Z", gmtime(&now) ) == 0)
+        "%a, %d %b %Y %H:%M:%S GMT", gmtime(&now) ) == 0)
             errx(1, "strftime() failed [%s]", dest);
     return dest;
 }
