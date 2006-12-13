@@ -2126,14 +2126,21 @@ static ssize_t send_from_file(const int s, const int fd,
 {
 #ifdef __FreeBSD__
     off_t sent;
-    if (sendfile(fd, s, ofs, size, NULL, &sent, 0) == -1)
-    {
+    int ret = sendfile(fd, s, ofs, size, NULL, &sent, 0);
+
+    /* It is possible for sendfile to send zero bytes due to a blocking
+     * condition.  Handle this correctly.
+     */
+    if (ret == -1)
         if (errno == EAGAIN)
-            return sent;
+            if (sent == 0)
+                return -1;
+            else
+                return sent;
         else
             return -1;
-    }
-    else return size;
+    else
+        return size;
 #else
 #if defined(__linux) || defined(__sun__)
     return sendfile(s, fd, &ofs, size);
