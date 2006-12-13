@@ -2416,7 +2416,6 @@ pidfile_create(void)
 {
     int error, fd;
     char pidstr[16];
-    assert(pidfile_path != NULL);
 
     /* Open the PID file and obtain exclusive lock. */
     fd = open(pidfile_name,
