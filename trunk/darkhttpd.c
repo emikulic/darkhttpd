@@ -299,6 +299,7 @@ static const char default_mimetype[] = "application/octet-stream";
 /* Prototypes. */
 static void poll_recv_request(struct connection *conn);
 static void poll_send_header(struct connection *conn);
+static void poll_send_reply(struct connection *conn);
 
 
 
@@ -2085,13 +2086,18 @@ static void poll_send_header(struct connection *conn)
     conn->total_sent += sent;
     total_out += sent;
 
-    /* check if we're done sending */
+    /* check if we're done sending header */
     if (conn->header_sent == conn->header_length)
     {
         if (conn->header_only)
             conn->state = DONE;
-        else
+        else {
             conn->state = SEND_REPLY;
+            /* go straight on to body, don't go through another iteration of
+             * the select() loop.
+             */
+            poll_send_reply(conn);
+        }
     }
 }
 
@@ -2159,6 +2165,8 @@ static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
 
+    assert(conn->state == SEND_REPLY);
+    assert(!conn->header_only);
     if (conn->reply_type == REPLY_GENERATED)
     {
         sent = send(conn->socket,
@@ -2183,6 +2191,10 @@ static void poll_send_reply(struct connection *conn)
     {
         if (sent == -1)
         {
+            if (errno == EAGAIN) {
+                if (debug) printf("poll_send_reply would have blocked\n");
+                return;
+            }
             if (debug) printf("send(%d) error: %s\n",
                 conn->socket, strerror(errno));
         }
@@ -2329,6 +2341,10 @@ static void httpd_poll(void)
 
     case SEND_REPLY:
         if (FD_ISSET(conn->socket, &send_set)) poll_send_reply(conn);
+        break;
+
+    case DONE:
+        /* do nothing (FIXME) */
         break;
 
     default: errx(1, "invalid state");
