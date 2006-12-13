@@ -1861,7 +1861,8 @@ static void process_get(struct connection *conn)
             to = conn->range_end;
 
             /* clamp [to] to filestat.st_size-1 */
-            if (to > (filestat.st_size-1)) to = filestat.st_size-1;
+            if (to > (size_t)(filestat.st_size-1))
+                to = filestat.st_size-1;
         }
         else if (conn->range_begin_given && !conn->range_end_given)
         {
@@ -2310,7 +2311,7 @@ static void httpd_poll(void)
 static int lifeline[2] = { -1, -1 };
 static int fd_null = -1;
 
-void
+static void
 daemonize_start(void)
 {
    pid_t f, w;
@@ -2346,7 +2347,7 @@ daemonize_start(void)
    /* else we are the child: continue initializing */
 }
 
-void
+static void
 daemonize_finish(void)
 {
    if (fd_null == -1)
