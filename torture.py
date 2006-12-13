@@ -2,7 +2,7 @@
 import sys, socket
 
 request = (
-'GET /AUTHORS HTTP/1.0\r\n'
+'GET /darkhttpd.c HTTP/1.0\r\n'
 '\r\n'
 )
 
