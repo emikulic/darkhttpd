@@ -14,14 +14,13 @@ all:
 	@echo "|     $(TARGETS)"
 	@echo "+----- ---- --- -- -"
 
-bsd:
-	make darkhttpd
-
-linux:
-	make darkhttpd
+bsd linux:
+	rm -f darkhttpd
+	${MAKE} darkhttpd
 
 solaris:
-	make darkhttpd LIBS="-lxnet -lsendfile"
+	rm -f darkhttpd
+	${MAKE} darkhttpd LIBS="-lxnet -lsendfile"
 
 darkhttpd: darkhttpd.c
 	$(CC) $(CFLAGS) $(LIBS) darkhttpd.c -o darkhttpd
