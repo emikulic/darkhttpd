@@ -360,7 +360,7 @@ static int vasprintf(char **strp, const char *fmt, va_list ap)
 
 
 /* ---------------------------------------------------------------------------
- * asprintf() that errx()s if it fails.
+ * vasprintf() that errx()s if it fails.
  */
 static unsigned int xvasprintf(char **ret, const char *format, va_list ap)
 {
@@ -520,8 +520,8 @@ static void consolidate_slashes(char *s)
 
 
 /* ---------------------------------------------------------------------------
- * Resolve /./ and /../ in a URI, returing a new, safe URI, or NULL if the URI
- * is invalid/unsafe.  Returned buffer needs to be deallocated.
+ * Resolve /./ and /../ in a URI, returning a new, safe URI, or NULL if the
+ * URI is invalid/unsafe.  Returned buffer needs to be deallocated.
  */
 static char *make_safe_uri(char *uri)
 {
