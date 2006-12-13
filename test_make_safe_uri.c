@@ -26,7 +26,7 @@ test(const char *input, const char *expected)
     free(tmp);
 }
 
-static char * const tests[] = {
+static char const *tests[] = {
     "/", "/",
     "/.", "/",
     "/./", "/",
@@ -52,9 +52,9 @@ static char * const tests[] = {
 };
 
 int
-main()
+main(void)
 {
-    char * const *curr = tests;
+    const char **curr = tests;
 
     while (curr[0] != NULL) {
         test(curr[0], curr[1]);
