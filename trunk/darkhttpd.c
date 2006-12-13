@@ -2351,20 +2351,17 @@ static void httpd_poll(void)
 
         if (conn->state == DONE) {
             /* clean out finished connection */
-            if (conn->conn_close)
-            {
+            if (conn->conn_close) {
                 LIST_REMOVE(conn, entries);
                 free_connection(conn);
                 free(conn);
-                break;
+            } else {
+                recycle_connection(conn);
+                /* and go right back to recv_request without going through
+                 * select() again.
+                 */
+                poll_recv_request(conn);
             }
-            /* else */
-            recycle_connection(conn);
-
-            /* and go right back to recv_request without going through
-             * select() again.
-             */
-            poll_recv_request(conn);
         }
     }
 }
