@@ -591,7 +591,7 @@ static char *make_safe_uri(char *uri)
     }
     free(chunks);
 
-    if (ends_in_slash) uri[pos++] = '/';
+    if ((num_chunks == 0) || ends_in_slash) uri[pos++] = '/';
     assert(pos <= urilen);
     uri[pos] = '\0';
     return uri;
