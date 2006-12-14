@@ -2547,7 +2547,6 @@ main(int argc, char **argv)
     sort_mime_map();
     xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", idletime);
     init_sockin();
-    tzset(); /* load TZ data; good idea to do this _before_ chroot */
 
     /* open logfile */
     if (logfile_name != NULL)
