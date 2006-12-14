@@ -1174,7 +1174,8 @@ static void accept_connection(void)
     /* allocate and initialise struct connection */
     conn = new_connection();
 
-    sin_size = (socklen_t)sizeof(struct sockaddr);
+    sin_size = sizeof(addrin);
+    memset(&addrin, 0, sin_size);
     conn->socket = accept(sockin, (struct sockaddr *)&addrin,
             &sin_size);
     if (conn->socket == -1) err(1, "accept()");
