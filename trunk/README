@@ -1,16 +1,16 @@
-darkhttpd
-=========
+darkhttpd Operational Manual
+============================
 
-Compiling
----------
+How to build darkhttpd
+----------------------
 
-Run make and follow the intructions given:
+Simply run make:
 	$ make
 
 
 
-Running
--------
+How to run darkhttpd, with examples
+-----------------------------------
 
 Serve /var/www/htdocs on the default port (port 80):
 	$ ./darkhttpd /var/www/htdocs
@@ -35,7 +35,6 @@ Use default.htm instead of index.html:
 
 Add mimetypes - in this case, serve .dat files as text/plain:
 	$ cat extramime
-	# this is a comment
 	text/plain	dat
 	$ ./darkhttpd /var/www/htdocs --mimetypes extramime
 
@@ -51,3 +50,7 @@ Run in the background and create a pidfile:
 
 Commandline options can be combined:
 	$ ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
+
+To see a full list of commandline options,
+run darkhttpd without any arguments:
+	$ ./darkhttpd

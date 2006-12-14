@@ -17,7 +17,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.3",
+    pkgname[]   = "darkhttpd/1.5",
     copyright[] = "copyright (c) 2003, 2004, 2006 Emil Mikulic",
     rcsid[]     = "$Id$";
 
