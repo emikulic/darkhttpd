@@ -2341,7 +2341,8 @@ static void httpd_poll(void)
     /* poll connections that select() says need attention */
     if (FD_ISSET(sockin, &recv_set)) accept_connection();
 
-    LIST_FOREACH(conn, &connlist, entries) {
+    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
+    {
         switch (conn->state)
         {
         case RECV_REQUEST:
