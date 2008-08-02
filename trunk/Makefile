@@ -2,7 +2,7 @@
 
 CC?=cc
 CFLAGS?=-O
-LIBS=`[ \`/usr/bin/uname\` = "SunOS" ] && echo -lsocket -lnsl`
+LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl`
 
 TARGETS = bsd linux solaris
 .PHONY: all $(TARGETS)
