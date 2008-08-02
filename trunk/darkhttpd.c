@@ -1,5 +1,5 @@
 /* darkhttpd
- * copyright (c) 2003, 2004, 2006 Emil Mikulic.
+ * copyright (c) 2003-2008 Emil Mikulic.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -17,8 +17,8 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.5",
-    copyright[] = "copyright (c) 2003, 2004, 2006 Emil Mikulic",
+    pkgname[]   = "darkhttpd/1.6",
+    copyright[] = "copyright (c) 2003-2008 Emil Mikulic",
     rcsid[]     = "$Id$";
 
 #ifndef DEBUG

@@ -1,5 +1,3 @@
-# darkhttpd (c) 2003, 2004, 2006 Emil Mikulic.
-
 CC?=cc
 CFLAGS?=-O
 LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl`

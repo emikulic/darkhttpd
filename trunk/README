@@ -1,6 +1,3 @@
-darkhttpd Operational Manual
-============================
-
 How to build darkhttpd
 ----------------------
 
@@ -9,8 +6,8 @@ Simply run make:
 
 
 
-How to run darkhttpd, with examples
------------------------------------
+How to run darkhttpd
+--------------------
 
 Serve /var/www/htdocs on the default port (port 80):
 	$ ./darkhttpd /var/www/htdocs
