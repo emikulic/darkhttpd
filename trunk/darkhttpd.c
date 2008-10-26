@@ -1715,11 +1715,9 @@ static int needs_urlencoding(unsigned char c)
 static void urlencode_filename(unsigned char *name, unsigned char *safe_url)
 {
     const static char hex[] = "0123456789ABCDEF";
-    int i, j, len;
+    int i, j;
 
-    len = strlen(name);
-
-    for (i=j=0; i<len; i++)
+    for (i = j = 0; name[i] != '\0'; i++)
     {
         if (needs_urlencoding(name[i]))
         {
@@ -1746,10 +1744,6 @@ static void generate_dir_listing(struct connection *conn, const char *path)
     int i;
     struct apbuf *listing = make_apbuf();
 
-    /* If a filename is made up of entirely unsafe chars,
-       the url would be three times its original length. */
-    char safe_url[MAXNAMLEN*3];
-
     listsize = make_sorted_dirlist(path, &list);
     if (listsize == -1)
     {
@@ -1775,6 +1769,11 @@ static void generate_dir_listing(struct connection *conn, const char *path)
 
     for (i=0; i<listsize; i++)
     {
+        /* If a filename is made up of entirely unsafe chars,
+         * the url would be three times its original length.
+         */
+        char safe_url[MAXNAMLEN*3];
+
         urlencode_filename(list[i]->name, safe_url);
 
         append(listing, "<a href=\"");
