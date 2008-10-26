@@ -1693,13 +1693,13 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size)
 /* ---------------------------------------------------------------------------
  * Should this character be urlencoded (according to rfc1738)
  */
-static int is_bad_char(unsigned char c)
+static int needs_urlencoding(unsigned char c)
 {
     int i;
     const static char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
 
     for (i=0; i<sizeof(bad)-1; i++)
-        if (c == bad[i]) 
+        if (c == bad[i])
             return 1;
 
     /* Non-US-ASCII characters */
@@ -1721,13 +1721,13 @@ static void urlencode_filename(unsigned char *name, unsigned char *safe_url)
 
     for (i=j=0; i<len; i++)
     {
-        if (is_bad_char(name[i]))  
+        if (needs_urlencoding(name[i]))
         {
             safe_url[j++] = '%';
             safe_url[j++] = hex[(name[i] >> 4) & 0xF];
             safe_url[j++] = hex[ name[i]       & 0xF];
-        } 
-        else 
+        }
+        else
             safe_url[j++] = name[i];
     }
 
