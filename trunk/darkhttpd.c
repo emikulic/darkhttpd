@@ -1690,7 +1690,49 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size)
     }
 }
 
+/* ---------------------------------------------------------------------------
+ * Should this character be urlencoded (according to rfc1738)
+ */
+static int is_bad_char(unsigned char c)
+{
+    int i;
+    const static char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
 
+    for (i=0; i<sizeof(bad)-1; i++)
+        if (c == bad[i]) 
+            return 1;
+
+    /* Non-US-ASCII characters */
+    if ((c <= 0x1F) || (c >= 0x80) || (c == 0x7F))
+        return 1;
+
+    return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Encode filename to be an rfc1738-compliant URL part
+ */
+static void urlencode_filename(unsigned char *name, unsigned char *safe_url)
+{
+    const static char hex[] = "0123456789ABCDEF";
+    int i, j, len;
+
+    len = strlen(name);
+
+    for (i=j=0; i<len; i++)
+    {
+        if (is_bad_char(name[i]))  
+        {
+            safe_url[j++] = '%';
+            safe_url[j++] = hex[(name[i] >> 4) & 0xF];
+            safe_url[j++] = hex[ name[i]       & 0xF];
+        } 
+        else 
+            safe_url[j++] = name[i];
+    }
+
+    safe_url[j] = '\0';
+}
 
 /* ---------------------------------------------------------------------------
  * Generate directory listing.
@@ -1703,6 +1745,10 @@ static void generate_dir_listing(struct connection *conn, const char *path)
     size_t maxlen = 0;
     int i;
     struct apbuf *listing = make_apbuf();
+
+    /* If a filename is made up of entirely unsafe chars,
+       the url would be three times its original length. */
+    char safe_url[MAXNAMLEN*3];
 
     listsize = make_sorted_dirlist(path, &list);
     if (listsize == -1)
@@ -1729,8 +1775,10 @@ static void generate_dir_listing(struct connection *conn, const char *path)
 
     for (i=0; i<listsize; i++)
     {
+        urlencode_filename(list[i]->name, safe_url);
+
         append(listing, "<a href=\"");
-        append(listing, list[i]->name);
+        append(listing, safe_url);
         append(listing, "\">");
         append(listing, list[i]->name);
         append(listing, "</a>");
