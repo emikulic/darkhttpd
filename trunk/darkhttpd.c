@@ -1772,7 +1772,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
         /* If a filename is made up of entirely unsafe chars,
          * the url would be three times its original length.
          */
-        char safe_url[MAXNAMLEN*3];
+        char safe_url[MAXNAMLEN*3 + 1];
 
         urlencode_filename(list[i]->name, safe_url);
 
