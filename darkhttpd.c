@@ -67,6 +67,14 @@ static const int debug = 1;
 #endif
 #endif
 
+#ifndef MAXNAMLEN
+ #ifdef NAME_MAX
+ #define MAXNAMLEN NAME_MAX
+ #else
+ #define MAXNAMLEN   255
+ #endif
+#endif
+
 #ifndef min
 #define min(a,b) ( ((a)<(b)) ? (a) : (b) )
 #endif
