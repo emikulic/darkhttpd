@@ -1483,8 +1483,7 @@ static void parse_range_field(struct connection *conn)
         if (bound1 != bound2)
         {
             conn->range_begin_given = 1;
-            conn->range_begin = (size_t)strtol(range+bound1, NULL, 10);
-
+            conn->range_begin = (off_t)strtoll(range+bound1, NULL, 10);
         }
 
         /* parse number after hyphen */
@@ -1500,7 +1499,7 @@ static void parse_range_field(struct connection *conn)
         if (bound1 != bound2)
         {
             conn->range_end_given = 1;
-            conn->range_end = (size_t)strtol(range+bound1, NULL, 10);
+            conn->range_end = (off_t)strtoll(range+bound1, NULL, 10);
         }
     }
     while(0); /* break handling */
@@ -1918,7 +1917,7 @@ static void process_get(struct connection *conn)
 
     if (conn->range_begin_given || conn->range_end_given)
     {
-        size_t from, to;
+        off_t from, to;
 
         if (conn->range_begin_given && conn->range_end_given)
         {
