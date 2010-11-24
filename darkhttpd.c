@@ -1682,7 +1682,7 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size)
 /* ---------------------------------------------------------------------------
  * Should this character be urlencoded (according to rfc1738)
  */
-static int needs_urlencoding(unsigned char c)
+static int needs_urlencoding(char c)
 {
     int i;
     const static char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
@@ -1701,7 +1701,7 @@ static int needs_urlencoding(unsigned char c)
 /* ---------------------------------------------------------------------------
  * Encode filename to be an rfc1738-compliant URL part
  */
-static void urlencode_filename(unsigned char *name, unsigned char *safe_url)
+static void urlencode_filename(char *name, char *safe_url)
 {
     const static char hex[] = "0123456789ABCDEF";
     int i, j;
