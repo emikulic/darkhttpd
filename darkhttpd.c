@@ -1,5 +1,5 @@
 /* darkhttpd
- * copyright (c) 2003-2008 Emil Mikulic.
+ * copyright (c) 2003-2010 Emil Mikulic.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -17,9 +17,8 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.7",
-    copyright[] = "copyright (c) 2003-2008 Emil Mikulic",
-    rcsid[]     = "$Id$";
+    pkgname[]   = "darkhttpd/1.8",
+    copyright[] = "copyright (c) 2003-2010 Emil Mikulic";
 
 #ifndef DEBUG
 #define NDEBUG
@@ -30,6 +29,7 @@ static const int debug = 1;
 
 #ifdef __linux
 #define _GNU_SOURCE /* for strsignal() and vasprintf() */
+#define _FILE_OFFSET_BITS 64 /* stat() files bigger than 2GB */
 #include <sys/sendfile.h>
 #endif
 
@@ -199,8 +199,8 @@ struct connection
 
     /* request fields */
     char *method, *uri, *referer, *user_agent;
-    size_t range_begin, range_end;
-    int range_begin_given, range_end_given;
+    off_t range_begin, range_end;
+    off_t range_begin_given, range_end_given;
 
     char *header;
     size_t header_length, header_sent;
@@ -210,7 +210,7 @@ struct connection
     char *reply;
     int reply_dont_free;
     int reply_fd;
-    size_t reply_start, reply_length, reply_sent;
+    off_t reply_start, reply_length, reply_sent;
 
     unsigned int total_sent; /* header + body = total, for logging */
 };
@@ -1017,17 +1017,6 @@ static void parse_commandline(const int argc, char *argv[])
         usage(); /* no wwwroot given */
         exit(EXIT_FAILURE);
     }
-    if (strcmp(argv[1], "--version") == 0)
-    {
-        printf("%s "
-#ifdef NDEBUG
-        "-debug"
-#else
-        "+debug"
-#endif
-        "\n", rcsid);
-        exit(EXIT_FAILURE);
-    }
 
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
@@ -1787,7 +1776,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
         else
         {
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
-            appendf(listing, "%10d\n", list[i]->size);
+            appendf(listing, "%10lld\n", (long long)list[i]->size);
         }
     }
 
@@ -1967,19 +1956,20 @@ static void process_get(struct connection *conn)
             "Server: %s\r\n"
             "%s" /* keep-alive */
             "Content-Length: %d\r\n"
-            "Content-Range: bytes %d-%d/%d\r\n"
+            "Content-Range: bytes %lld-%lld/%lld\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), pkgname, keep_alive(conn),
-            conn->reply_length, from, to, filestat.st_size,
+            conn->reply_length, (long long)from, (long long)to,
+            (long long)filestat.st_size,
             mimetype, lastmod
         );
         conn->http_code = 206;
-        if (debug) printf("sending %u-%u/%u\n",
-            (unsigned int)from, (unsigned int)to,
-            (unsigned int)filestat.st_size);
+        if (debug) printf("sending %lld-%lld/%lld\n",
+            (long long)from, (long long)to,
+            (long long)filestat.st_size);
     }
     else /* no range stuff */
     {
@@ -1990,13 +1980,13 @@ static void process_get(struct connection *conn)
             "Date: %s\r\n"
             "Server: %s\r\n"
             "%s" /* keep-alive */
-            "Content-Length: %d\r\n"
+            "Content-Length: %lld\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), pkgname, keep_alive(conn),
-            conn->reply_length, mimetype, lastmod
+            (long long)conn->reply_length, mimetype, lastmod
         );
         conn->http_code = 200;
     }
@@ -2170,7 +2160,7 @@ static void poll_send_header(struct connection *conn)
  * read error.
  */
 static ssize_t send_from_file(const int s, const int fd,
-    off_t ofs, const size_t size)
+    off_t ofs, off_t size)
 {
 #ifdef __FreeBSD__
     off_t sent;
@@ -2191,6 +2181,9 @@ static ssize_t send_from_file(const int s, const int fd,
         return size;
 #else
 #if defined(__linux) || defined(__sun__)
+    /* Limit truly ridiculous (LARGEFILE) requests. */
+    if (size > 1<<20)
+        size = 1<<20;
     return sendfile(s, fd, &ofs, size);
 #else
     #define BUFSIZE 20000
@@ -2242,9 +2235,13 @@ static void poll_send_reply(struct connection *conn)
     }
     else
     {
+        errno = 0;
         sent = send_from_file(conn->socket, conn->reply_fd,
             (off_t)(conn->reply_start + conn->reply_sent),
             conn->reply_length - conn->reply_sent);
+        if (debug && (sent < 1))
+            printf("send_from_file returned %lld (errno=%d %s)\n",
+                (long long)sent, errno, strerror(errno));
     }
     conn->last_active = now;
     if (debug) printf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
