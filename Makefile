@@ -2,8 +2,7 @@ CC?=cc
 CFLAGS?=-O
 LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl`
 
-TARGETS = bsd linux solaris
-.PHONY: all $(TARGETS)
+.PHONY: all clean
 
 all: darkhttpd
 
