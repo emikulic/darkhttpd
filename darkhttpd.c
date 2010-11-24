@@ -1955,14 +1955,14 @@ static void process_get(struct connection *conn)
             "Date: %s\r\n"
             "Server: %s\r\n"
             "%s" /* keep-alive */
-            "Content-Length: %d\r\n"
+            "Content-Length: %lld\r\n"
             "Content-Range: bytes %lld-%lld/%lld\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), pkgname, keep_alive(conn),
-            conn->reply_length, (long long)from, (long long)to,
+            (long long)conn->reply_length, (long long)from, (long long)to,
             (long long)filestat.st_size,
             mimetype, lastmod
         );
@@ -2237,18 +2237,18 @@ static void poll_send_reply(struct connection *conn)
     {
         errno = 0;
         sent = send_from_file(conn->socket, conn->reply_fd,
-            (off_t)(conn->reply_start + conn->reply_sent),
+            conn->reply_start + conn->reply_sent,
             conn->reply_length - conn->reply_sent);
         if (debug && (sent < 1))
             printf("send_from_file returned %lld (errno=%d %s)\n",
                 (long long)sent, errno, strerror(errno));
     }
     conn->last_active = now;
-    if (debug) printf("poll_send_reply(%d) sent %d: %d+[%d-%d] of %d\n",
-        conn->socket, (int)sent, (int)conn->reply_start,
-        (int)conn->reply_sent,
-        (int)(conn->reply_sent + sent - 1),
-        (int)conn->reply_length);
+    if (debug) printf("poll_send_reply(%d) sent %d: %lld+[%lld-%lld] of %lld\n",
+        conn->socket, (int)sent, (long long)conn->reply_start,
+        (long long)conn->reply_sent,
+        (long long)(conn->reply_sent + sent - 1),
+        (long long)conn->reply_length);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1)
@@ -2270,8 +2270,8 @@ static void poll_send_reply(struct connection *conn)
         conn->state = DONE;
         return;
     }
-    conn->reply_sent += (unsigned int)sent;
-    conn->total_sent += (unsigned int)sent;
+    conn->reply_sent += sent;
+    conn->total_sent += sent;
     total_out += sent;
 
     /* check if we're done sending */
