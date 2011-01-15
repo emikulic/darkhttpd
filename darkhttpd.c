@@ -1512,7 +1512,9 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     }
     closedir(dir);
     free(currname);
-    qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
+    assert(list != NULL);
+    if (list) /* there's gotta be at least ".." */
+        qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
     *output = xrealloc(list, sizeof(struct dlent*) * entries);
     return (ssize_t)entries;
     #undef POOL_INCR
