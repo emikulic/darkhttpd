@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# Build with pretty-much all GCC warnings enabled.
+#
+
+# from FreeBSD's src/share/examples/etc/make.conf,v 1.279.10.3.2.1
+BDECFLAGS="-W -Wall -pedantic -Wbad-function-cast -Wcast-align \
+-Wcast-qual -Wchar-subscripts -Winline \
+-Wmissing-prototypes -Wnested-externs -Wpointer-arith \
+-Wredundant-decls -Wshadow -Wstrict-prototypes -Wwrite-strings"
+# local change: removed -ansi above
+
+# disabling:
+# -Wunreachable-code
+# -Wconversion
+#
+# (usually wrong, too noisy, complain about macros from system headers)
+
+gcc -std=c99 $BDECFLAGS \
+-Wextra -Waddress -Waggregate-return \
+-Warray-bounds \
+-Wclobbered \
+-Wcomment -Wcoverage-mismatch \
+-Wdisabled-optimization \
+-Wempty-body \
+-Wfloat-equal -Wformat -Wformat=2 \
+-Wformat-nonliteral \
+-Wformat-security -Wformat-y2k \
+-Wignored-qualifiers -Wimplicit \
+-Winit-self \
+-Winvalid-pch \
+-Wunsafe-loop-optimizations -Wlogical-op -Wlong-long -Wmain \
+-Wmissing-braces -Wmissing-field-initializers -Wmissing-format-attribute \
+-Wmissing-include-dirs -Wmissing-noreturn \
+-Woverlength-strings -Wpacked \
+-Wpacked-bitfield-compat -Wpadded -Wparentheses \
+-Wreturn-type -Wsequence-point -Wsign-compare \
+-Wsign-conversion -Wstack-protector -Wstrict-aliasing \
+-Wstrict-overflow -Wstrict-overflow=5 -Wswitch \
+-Wswitch-default -Wswitch-enum -Wsync-nand -Wtrigraphs \
+-Wtype-limits -Wundef -Wuninitialized -Wunknown-pragmas \
+-Wunused -Wunused-function -Wunused-label \
+-Wunused-parameter -Wunused-value -Wunused-variable \
+-Wvariadic-macros -Wvla -Wvolatile-register-var \
+-Wabi \
+-O -pipe -fstrict-aliasing ../darkhttpd.c
+
+echo errcode: $?
+rm -f a.out
