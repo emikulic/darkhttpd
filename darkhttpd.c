@@ -1,5 +1,5 @@
 /* darkhttpd
- * copyright (c) 2003-2010 Emil Mikulic.
+ * copyright (c) 2003-2011 Emil Mikulic.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -18,7 +18,7 @@
 
 static const char
     pkgname[]   = "darkhttpd/1.8",
-    copyright[] = "copyright (c) 2003-2010 Emil Mikulic";
+    copyright[] = "copyright (c) 2003-2011 Emil Mikulic";
 
 #ifndef DEBUG
 #define NDEBUG
