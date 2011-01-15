@@ -832,12 +832,12 @@ static const char *uri_content_type(const char *uri)
 {
     size_t period, urilen = strlen(uri);
 
-    for (period=urilen-1;
-        period > 0 &&
-        uri[period] != '.' &&
-        (urilen-period-1) <= longest_ext;
-        period--)
-            ;
+    period=urilen;
+    while ((period > 0) &&
+           (uri[period] != '.') &&
+           ((urilen-period-1) <= longest_ext)) {
+        period--;
+    }
 
     if (uri[period] == '.')
     {
