@@ -419,34 +419,26 @@ static struct apbuf *make_apbuf(void)
     return buf;
 }
 
-
-
-static void appendl(struct apbuf *buf, const char *s, const size_t len)
-{
-    if (buf->pool < buf->length + len)
-    {
+/* Append s (of length len) to buf. */
+static void appendl(struct apbuf *buf, const char *s, const size_t len) {
+    if (buf->pool < buf->length + len) {
         /* pool has dried up */
-        while (buf->pool < buf->length + len) buf->pool += APBUF_GROW;
+        while (buf->pool < buf->length + len)
+            buf->pool += APBUF_GROW;
         buf->str = xrealloc(buf->str, buf->pool);
     }
-
     memcpy(buf->str + buf->length, s, len);
     buf->length += len;
 }
-
-
 
 #ifdef __GNUC__
 #define append(buf, s) appendl(buf, s, \
     (__builtin_constant_p(s) ? sizeof(s)-1 : strlen(s)) )
 #else
-static void append(struct apbuf *buf, const char *s)
-{
+static void append(struct apbuf *buf, const char *s) {
     appendl(buf, s, strlen(s));
 }
 #endif
-
-
 
 static void appendf(struct apbuf *buf, const char *format, ...)
 {
