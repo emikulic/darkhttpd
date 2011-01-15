@@ -653,7 +653,9 @@ static void parse_mimetype_line(const char *line) {
  * be NULL terminated.
  */
 static void parse_default_extension_map(void) {
-    for (unsigned int i=0; default_extension_map[i] != NULL; i++)
+    size_t i;
+
+    for (i = 0; default_extension_map[i] != NULL; i++)
         parse_mimetype_line(default_extension_map[i]);
 }
 
@@ -1154,7 +1156,9 @@ static void recycle_connection(struct connection *conn) {
 
 /* Uppercasify all characters in a string of given length. */
 static void strntoupper(char *str, const size_t length) {
-    for (size_t i=0; i<length; i++)
+    size_t i;
+
+    for (i = 0; i < length; i++)
         str[i] = toupper(str[i]);
 }
 
