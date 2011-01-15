@@ -962,38 +962,37 @@ static void parse_commandline(const int argc, char *argv[]) {
                 errx(1, "missing filename after --mimetypes");
             parse_extension_map_file(argv[i]);
         }
-        else if (strcmp(argv[i], "--uid") == 0)
-        {
+        else if (strcmp(argv[i], "--uid") == 0) {
             struct passwd *p;
             int num;
-            if (++i >= argc) errx(1, "missing uid after --uid");
+            if (++i >= argc)
+                errx(1, "missing uid after --uid");
             p = getpwnam(argv[i]);
             if ((p == NULL) && (str_to_num(argv[i], &num)))
                 p = getpwuid( (uid_t)num );
 
-            if (p == NULL) errx(1, "no such uid: `%s'", argv[i]);
+            if (p == NULL)
+                errx(1, "no such uid: `%s'", argv[i]);
             drop_uid = p->pw_uid;
         }
-        else if (strcmp(argv[i], "--gid") == 0)
-        {
+        else if (strcmp(argv[i], "--gid") == 0) {
             struct group *g;
             int num;
-            if (++i >= argc) errx(1, "missing gid after --gid");
+            if (++i >= argc)
+                errx(1, "missing gid after --gid");
             g = getgrnam(argv[i]);
             if ((g == NULL) && (str_to_num(argv[i], &num)))
-                g = getgrgid( (gid_t)num );
-
-            if (g == NULL) errx(1, "no such gid: `%s'", argv[i]);
+                g = getgrgid((gid_t)num);
+            if (g == NULL)
+                errx(1, "no such gid: `%s'", argv[i]);
             drop_gid = g->gr_gid;
         }
-        else if (strcmp(argv[i], "--pidfile") == 0)
-        {
+        else if (strcmp(argv[i], "--pidfile") == 0) {
             if (++i >= argc)
                 errx(1, "missing filename after --pidfile");
             pidfile_name = argv[i];
         }
-        else if (strcmp(argv[i], "--accf") == 0)
-        {
+        else if (strcmp(argv[i], "--accf") == 0) {
             want_accf = 1;
         }
         else
@@ -1001,13 +1000,8 @@ static void parse_commandline(const int argc, char *argv[]) {
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Allocate and initialize an empty connection.
- */
-static struct connection *new_connection(void)
-{
+/* Allocate and initialize an empty connection. */
+static struct connection *new_connection(void) {
     struct connection *conn = xmalloc(sizeof(struct connection));
 
     conn->socket = -1;
@@ -1046,13 +1040,8 @@ static struct connection *new_connection(void)
     return conn;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Accept a connection from sockin and add it to the connection queue.
- */
-static void accept_connection(void)
-{
+/* Accept a connection from sockin and add it to the connection queue. */
+static void accept_connection(void) {
     struct sockaddr_in addrin;
     socklen_t sin_size;
     struct connection *conn;
@@ -1062,9 +1051,9 @@ static void accept_connection(void)
 
     sin_size = sizeof(addrin);
     memset(&addrin, 0, sin_size);
-    conn->socket = accept(sockin, (struct sockaddr *)&addrin,
-            &sin_size);
-    if (conn->socket == -1) err(1, "accept()");
+    conn->socket = accept(sockin, (struct sockaddr *)&addrin, &sin_size);
+    if (conn->socket == -1)
+        err(1, "accept()");
 
     nonblock_socket(conn->socket);
 
@@ -1072,25 +1061,45 @@ static void accept_connection(void)
     conn->client = addrin.sin_addr.s_addr;
     LIST_INSERT_HEAD(&connlist, conn, entries);
 
-    if (debug) printf("accepted connection from %s:%u\n",
-        inet_ntoa(addrin.sin_addr),
-        ntohs(addrin.sin_port) );
+    if (debug)
+        printf("accepted connection from %s:%u\n",
+               inet_ntoa(addrin.sin_addr), ntohs(addrin.sin_port));
 
-    /* try to read straight away rather than going through another iteration
+    /* Try to read straight away rather than going through another iteration
      * of the select() loop.
      */
     poll_recv_request(conn);
 }
 
+/* Add a connection's details to the logfile. */
+static void log_connection(const struct connection *conn) {
+    struct in_addr inaddr;
 
+    if (logfile == NULL)
+        return;
+    if (conn->http_code == 0)
+        return; /* invalid - died in request */
+    if (conn->method == NULL)
+        return; /* invalid - didn't parse - maybe too long */
 
-static void log_connection(const struct connection *conn);
+    /* Separated by tabs:
+     * time client_ip method uri http_code bytes_sent "referer" "user-agent"
+     */
 
-/* ---------------------------------------------------------------------------
- * Log a connection, then cleanly deallocate its internals.
- */
-static void free_connection(struct connection *conn)
-{
+    inaddr.s_addr = conn->client;
+
+    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
+        (unsigned long int)now, inet_ntoa(inaddr),
+        conn->method, conn->uri,
+        conn->http_code, (unsigned long long)conn->total_sent,
+        (conn->referer == NULL)?"":conn->referer,
+        (conn->user_agent == NULL)?"":conn->user_agent
+        );
+    fflush(logfile);
+}
+
+/* Log a connection, then cleanly deallocate its internals. */
+static void free_connection(struct connection *conn) {
     if (debug) printf("free_connection(%d)\n", conn->socket);
     log_connection(conn);
     if (conn->socket != -1) xclose(conn->socket);
@@ -1099,21 +1108,16 @@ static void free_connection(struct connection *conn)
     if (conn->uri != NULL) free(conn->uri);
     if (conn->referer != NULL) free(conn->referer);
     if (conn->user_agent != NULL) free(conn->user_agent);
-    if (conn->header != NULL && !conn->header_dont_free)
-        free(conn->header);
+    if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_fd != -1) xclose(conn->reply_fd);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Recycle a finished connection for HTTP/1.1 Keep-Alive.
- */
-static void recycle_connection(struct connection *conn)
-{
+/* Recycle a finished connection for HTTP/1.1 Keep-Alive. */
+static void recycle_connection(struct connection *conn) {
     int socket_tmp = conn->socket;
-    if (debug) printf("recycle_connection(%d)\n", socket_tmp);
+    if (debug)
+        printf("recycle_connection(%d)\n", socket_tmp);
     conn->socket = -1; /* so free_connection() doesn't close it */
     free_connection(conn);
     conn->socket = socket_tmp;
@@ -1147,71 +1151,50 @@ static void recycle_connection(struct connection *conn)
     conn->state = RECV_REQUEST; /* ready for another */
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Uppercasify all characters in a string of given length.
- */
-static void strntoupper(char *str, const size_t length)
-{
-    size_t i;
-    for (i=0; i<length; i++)
+/* Uppercasify all characters in a string of given length. */
+static void strntoupper(char *str, const size_t length) {
+    for (size_t i=0; i<length; i++)
         str[i] = toupper(str[i]);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * If a connection has been idle for more than idletime seconds, it will be
+/* If a connection has been idle for more than idletime seconds, it will be
  * marked as DONE and killed off in httpd_poll()
  */
-static void poll_check_timeout(struct connection *conn)
-{
-    if (idletime > 0) /* optimised away by compiler */
-    {
-        if (now - conn->last_active >= idletime)
-        {
-            if (debug) printf("poll_check_timeout(%d) caused closure\n",
-                conn->socket);
+static void poll_check_timeout(struct connection *conn) {
+    if (idletime > 0) { /* optimised away by compiler */
+        if (now - conn->last_active >= idletime) {
+            if (debug)
+                printf("poll_check_timeout(%d) caused closure\n",
+                       conn->socket);
             conn->conn_close = 1;
             conn->state = DONE;
         }
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Format [when] as an RFC1123 date, stored in the specified buffer.  The same
+/* Format [when] as an RFC1123 date, stored in the specified buffer.  The same
  * buffer is returned for convenience.
  */
 #define DATE_LEN 30 /* strlen("Fri, 28 Feb 2003 00:02:08 GMT")+1 */
-static char *rfc1123_date(char *dest, const time_t when)
-{
+static char *rfc1123_date(char *dest, const time_t when) {
     time_t when_copy = when;
     if (strftime(dest, DATE_LEN,
-        "%a, %d %b %Y %H:%M:%S GMT", gmtime(&when_copy) ) == 0)
-            errx(1, "strftime() failed [%s]", dest);
+                 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&when_copy)) == 0)
+        errx(1, "strftime() failed [%s]", dest);
     return dest;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Decode URL by converting %XX (where XX are hexadecimal digits) to the
+/* Decode URL by converting %XX (where XX are hexadecimal digits) to the
  * character it represents.  Don't forget to free the return value.
  */
-static char *urldecode(const char *url)
-{
-    size_t i, len = strlen(url);
+static char *urldecode(const char *url) {
+    size_t len = strlen(url);
     char *out = xmalloc(len+1);
     int pos;
 
-    for (i=0, pos=0; i<len; i++)
-    {
-        if (url[i] == '%' && i+2 < len &&
-            isxdigit(url[i+1]) && isxdigit(url[i+2]))
-        {
+    for (size_t i = 0, pos = 0; i < len; i++) {
+        if ((url[i] == '%') && (i+2 < len) &&
+            isxdigit(url[i+1]) && isxdigit(url[i+2])) {
             /* decode %XX */
             #define HEX_TO_DIGIT(hex) ( \
                 ((hex) >= 'A' && (hex) <= 'F') ? ((hex)-'A'+10): \
@@ -1221,20 +1204,15 @@ static char *urldecode(const char *url)
             out[pos++] = HEX_TO_DIGIT(url[i+1]) * 16 +
                          HEX_TO_DIGIT(url[i+2]);
             i += 2;
-
             #undef HEX_TO_DIGIT
-        }
-        else
-        {
+        } else {
             /* straight copy */
             out[pos++] = url[i];
         }
     }
     out[pos] = '\0';
-    return (out);
+    return out;
 }
-
-
 
 /* ---------------------------------------------------------------------------
  * A default reply for any (erroneous) occasion.
@@ -2172,38 +2150,6 @@ static void poll_send_reply(struct connection *conn)
 
     /* check if we're done sending */
     if (conn->reply_sent == conn->reply_length) conn->state = DONE;
-}
-
-
-
-/* ---------------------------------------------------------------------------
- * Add a connection's details to the logfile.
- */
-static void log_connection(const struct connection *conn)
-{
-    struct in_addr inaddr;
-
-    if (logfile == NULL)
-        return;
-    if (conn->http_code == 0)
-        return; /* invalid - died in request */
-    if (conn->method == NULL)
-        return; /* invalid - didn't parse - maybe too long */
-
-    /* Separated by tabs:
-     * time client_ip method uri http_code bytes_sent "referer" "user-agent"
-     */
-
-    inaddr.s_addr = conn->client;
-
-    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
-        (unsigned long int)now, inet_ntoa(inaddr),
-        conn->method, conn->uri,
-        conn->http_code, (unsigned long long)conn->total_sent,
-        (conn->referer == NULL)?"":conn->referer,
-        (conn->user_agent == NULL)?"":conn->user_agent
-        );
-    fflush(logfile);
 }
 
 
