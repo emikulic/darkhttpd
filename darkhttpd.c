@@ -75,6 +75,15 @@ static const int debug = 1;
 #define O_EXLOCK O_EXCL
 #endif
 
+#ifdef __GNUC__
+/* [->] borrowed from FreeBSD's src/sys/sys/cdefs.h,v 1.102.2.2.2.1 */
+#define __printflike(fmtarg, firstvararg) \
+            __attribute__((__format__(__printf__, fmtarg, firstvararg)))
+/* [<-] */
+#else
+#define __printflike(fmtarg, firstvararg)
+#endif
+
 /* [->] borrowed from FreeBSD's src/sys/sys/systm.h,v 1.276.2.7.4.1 */
 #ifndef CTASSERT                /* Allow lint to override */
 #define CTASSERT(x)             _CTASSERT(x, __LINE__)
@@ -91,49 +100,45 @@ CTASSERT(sizeof(unsigned long long) >= sizeof(off_t));
 /* err - prints "error: format: strerror(errno)" to stderr and exit()s with
  * the given code.
  */
-static void
-err(const int code, const char *format, ...)
-{
-   va_list va;
+static void err(const int code, const char *format, ...) __printflike(2, 3);
+static void err(const int code, const char *format, ...) {
+    va_list va;
 
-   va_start(va, format);
-   fprintf(stderr, "error: ");
-   vfprintf(stderr, format, va);
-   fprintf(stderr, ": %s\n", strerror(errno));
-   va_end(va);
-   exit(code);
+    va_start(va, format);
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, format, va);
+    fprintf(stderr, ": %s\n", strerror(errno));
+    va_end(va);
+    exit(code);
 }
 
-/* errx - err without the strerror */
-static void
-errx(const int code, const char *format, ...)
-{
-   va_list va;
+/* errx - err() without the strerror */
+static void errx(const int code, const char *format, ...) __printflike(2, 3);
+static void errx(const int code, const char *format, ...) {
+    va_list va;
 
-   va_start(va, format);
-   fprintf(stderr, "error: ");
-   vfprintf(stderr, format, va);
-   fprintf(stderr, "\n");
-   va_end(va);
-   exit(code);
+    va_start(va, format);
+    fprintf(stderr, "error: ");
+    vfprintf(stderr, format, va);
+    fprintf(stderr, "\n");
+    va_end(va);
+    exit(code);
 }
 
-/* warn - err without the exit */
-static void
-warn(const char *format, ...)
-{
-   va_list va;
+/* warn - err() without the exit */
+static void warn(const char *format, ...) __printflike(1, 2);
+static void warn(const char *format, ...) {
+    va_list va;
 
-   va_start(va, format);
-   fprintf(stderr, "warning: ");
-   vfprintf(stderr, format, va);
-   fprintf(stderr, ": %s\n", strerror(errno));
-   va_end(va);
+    va_start(va, format);
+    fprintf(stderr, "warning: ");
+    vfprintf(stderr, format, va);
+    fprintf(stderr, ": %s\n", strerror(errno));
+    va_end(va);
 }
 #endif
 
-/* ---------------------------------------------------------------------------
- * LIST_* macros taken from FreeBSD's src/sys/sys/queue.h,v 1.56
+/* [->] LIST_* macros taken from FreeBSD's src/sys/sys/queue.h,v 1.56
  * Copyright (c) 1991, 1993
  *      The Regents of the University of California.  All rights reserved.
  *
@@ -184,15 +189,12 @@ struct {                                                                \
                     (elm)->field.le_prev;                               \
         *(elm)->field.le_prev = LIST_NEXT((elm), field);                \
 } while (0)
-/* ------------------------------------------------------------------------ */
-
-
+/* [<-] */
 
 LIST_HEAD(conn_list_head, connection) connlist =
     LIST_HEAD_INITIALIZER(conn_list_head);
 
-struct connection
-{
+struct connection {
     LIST_ENTRY(connection) entries;
 
     int socket;
@@ -203,7 +205,7 @@ struct connection
         SEND_HEADER,    /* sending generated header */
         SEND_REPLY,     /* sending reply */
         DONE            /* connection closed, need to remove from queue */
-        } state;
+    } state;
 
     /* char request[request_length+1] is null-terminated */
     char *request;
@@ -251,8 +253,6 @@ static time_t now;
  */
 #define MAX_REQUEST_LENGTH 4000
 
-
-
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
 static unsigned short bindport = 80;
@@ -299,8 +299,6 @@ static const char *default_extension_map[] = {
 
 static const char default_mimetype[] = "application/octet-stream";
 
-
-
 /* Connection or Keep-Alive field, depending on conn_close. */
 #define keep_alive(conn) ((conn)->conn_close ? \
     "Connection: close\r\n" : keep_alive_field)
@@ -310,59 +308,40 @@ static void poll_recv_request(struct connection *conn);
 static void poll_send_header(struct connection *conn);
 static void poll_send_reply(struct connection *conn);
 
-
-
-/* ---------------------------------------------------------------------------
- * close that dies on error.
- */
-static void xclose(const int fd)
-{
-    if (close(fd) == -1) err(1, "close()");
+/* close() that dies on error.  */
+static void xclose(const int fd) {
+    if (close(fd) == -1)
+        err(1, "close()");
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * malloc that errx()s if it can't allocate.
- */
-static void *xmalloc(const size_t size)
-{
+/* malloc that dies if it can't allocate. */
+static void *xmalloc(const size_t size) {
     void *ptr = malloc(size);
-    if (ptr == NULL) errx(1, "can't allocate %u bytes", size);
+    if (ptr == NULL)
+        errx(1, "can't allocate %u bytes", size);
     return ptr;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * realloc() that errx()s if it can't allocate.
- */
-static void *xrealloc(void *original, const size_t size)
-{
+/* realloc() that dies if it can't reallocate. */
+static void *xrealloc(void *original, const size_t size) {
     void *ptr = realloc(original, size);
-    if (ptr == NULL) errx(1, "can't reallocate %u bytes", size);
+    if (ptr == NULL)
+        errx(1, "can't reallocate %u bytes", size);
     return ptr;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * strdup() that errx()s if it can't allocate.  Do this by hand since strdup()
- * isn't C89.
+/* strdup() that dies if it can't allocate.
+ * Implement this ourselves since regular strdup() isn't C89.
  */
-static char *xstrdup(const char *src)
-{
+static char *xstrdup(const char *src) {
     size_t len = strlen(src) + 1;
     char *dest = xmalloc(len);
     memcpy(dest, src, len);
     return dest;
 }
 
-
-
 #ifdef __sun /* unimpressed by Solaris */
-static int vasprintf(char **strp, const char *fmt, va_list ap)
-{
+static int vasprintf(char **strp, const char *fmt, va_list ap) {
     char tmp;
     int result = vsnprintf(&tmp, 1, fmt, ap);
     *strp = xmalloc(result+1);
@@ -371,25 +350,20 @@ static int vasprintf(char **strp, const char *fmt, va_list ap)
 }
 #endif
 
-
-
-/* ---------------------------------------------------------------------------
- * vasprintf() that errx()s if it fails.
- */
+/* vasprintf() that dies if it fails. */
 static unsigned int xvasprintf(char **ret, const char *format, va_list ap)
-{
+    __printflike(2,0);
+static unsigned int xvasprintf(char **ret, const char *format, va_list ap) {
     int len = vasprintf(ret, format, ap);
-    if (ret == NULL || len == -1) errx(1, "out of memory in vasprintf()");
+    if (ret == NULL || len == -1)
+        errx(1, "out of memory in vasprintf()");
     return (unsigned int)len;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * asprintf() that errx()s if it fails.
- */
+/* asprintf() that dies if it fails. */
 static unsigned int xasprintf(char **ret, const char *format, ...)
-{
+    __printflike(2,3);
+static unsigned int xasprintf(char **ret, const char *format, ...) {
     va_list va;
     unsigned int len;
 
@@ -399,24 +373,17 @@ static unsigned int xasprintf(char **ret, const char *format, ...)
     return len;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Append buffer code.  A somewhat efficient string buffer with pool-based
+/* Append buffer code.  A somewhat efficient string buffer with pool-based
  * reallocation.
  */
 #define APBUF_INIT 4096
 #define APBUF_GROW APBUF_INIT
-struct apbuf
-{
+struct apbuf {
     size_t length, pool;
     char *str;
 };
 
-
-
-static struct apbuf *make_apbuf(void)
-{
+static struct apbuf *make_apbuf(void) {
     struct apbuf *buf = xmalloc(sizeof(struct apbuf));
     buf->length = 0;
     buf->pool = APBUF_INIT;
@@ -426,9 +393,10 @@ static struct apbuf *make_apbuf(void)
 
 /* Append s (of length len) to buf. */
 static void appendl(struct apbuf *buf, const char *s, const size_t len) {
-    if (buf->pool < buf->length + len) {
+    size_t need = buf->length + len;
+    if (buf->pool < need) {
         /* pool has dried up */
-        while (buf->pool < buf->length + len)
+        while (buf->pool < need)
             buf->pool += APBUF_GROW;
         buf->str = xrealloc(buf->str, buf->pool);
     }
@@ -446,7 +414,8 @@ static void append(struct apbuf *buf, const char *s) {
 #endif
 
 static void appendf(struct apbuf *buf, const char *format, ...)
-{
+    __printflike(2, 3);
+static void appendf(struct apbuf *buf, const char *format, ...) {
     char *tmp;
     va_list va;
     size_t len;
@@ -454,19 +423,12 @@ static void appendf(struct apbuf *buf, const char *format, ...)
     va_start(va, format);
     len = xvasprintf(&tmp, format, va);
     va_end(va);
-
     appendl(buf, tmp, len);
     free(tmp);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Make the specified socket non-blocking.
- */
-static void
-nonblock_socket(const int sock)
-{
+/* Make the specified socket non-blocking. */
+static void nonblock_socket(const int sock) {
     int flags = fcntl(sock, F_GETFL, NULL);
 
     if (flags == -1)
@@ -476,14 +438,9 @@ nonblock_socket(const int sock)
         err(1, "fcntl() to set O_NONBLOCK");
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Split string out of src with range [left:right-1]
- */
+/* Split string out of src with range [left:right-1] */
 static char *split_string(const char *src,
-    const size_t left, const size_t right)
-{
+        const size_t left, const size_t right) {
     char *dest;
     assert(left <= right);
     assert(left < strlen(src));   /* [left means must be smaller */
@@ -495,47 +452,35 @@ static char *split_string(const char *src,
     return dest;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Consolidate slashes in-place by shifting parts of the string over repeated
+/* Consolidate slashes in-place by shifting parts of the string over repeated
  * slashes.
  */
-static void consolidate_slashes(char *s)
-{
+static void consolidate_slashes(char *s) {
     size_t left = 0, right = 0;
     int saw_slash = 0;
 
     assert(s != NULL);
-
-    while (s[right] != '\0')
-    {
-        if (saw_slash)
-        {
-            if (s[right] == '/') right++;
-            else
-            {
+    while (s[right] != '\0') {
+        if (saw_slash) {
+            if (s[right] == '/')
+                right++;
+            else {
                 saw_slash = 0;
                 s[left++] = s[right++];
             }
-        }
-        else
-        {
-            if (s[right] == '/') saw_slash++;
+        } else {
+            if (s[right] == '/')
+                saw_slash++;
             s[left++] = s[right++];
         }
     }
     s[left] = '\0';
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Resolve /./ and /../ in a URI, in-place.  Returns NULL if the URI is
+/* Resolve /./ and /../ in a URI, in-place.  Returns NULL if the URI is
  * invalid/unsafe, or the original buffer if successful.
  */
-static char *make_safe_uri(char *uri)
-{
+static char *make_safe_uri(char *uri) {
     struct {
         char *start;
         size_t len;
@@ -545,7 +490,8 @@ static char *make_safe_uri(char *uri)
     int ends_in_slash;
 
     assert(uri != NULL);
-    if (uri[0] != '/') return NULL;
+    if (uri[0] != '/')
+        return NULL;
     consolidate_slashes(uri);
     urilen = strlen(uri);
     if (urilen > 0)
@@ -555,7 +501,8 @@ static char *make_safe_uri(char *uri)
 
     /* count the slashes */
     for (i=0, num_slashes=0; i<urilen; i++)
-        if (uri[i] == '/') num_slashes++;
+        if (uri[i] == '/')
+            num_slashes++;
 
     /* make an array for the URI elements */
     chunks = xmalloc(sizeof(*chunks) * num_slashes);
@@ -602,32 +549,29 @@ static char *make_safe_uri(char *uri)
     }
     free(chunks);
 
-    if ((num_chunks == 0) || ends_in_slash) uri[pos++] = '/';
+    if ((num_chunks == 0) || ends_in_slash)
+        uri[pos++] = '/';
     assert(pos <= urilen);
     uri[pos] = '\0';
     return uri;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Associates an extension with a mimetype in the mime_map.  Entries are in
+/* Associates an extension with a mimetype in the mime_map.  Entries are in
  * unsorted order.  Makes copies of extension and mimetype strings.
  */
-static void add_mime_mapping(const char *extension, const char *mimetype)
-{
+static void add_mime_mapping(const char *extension, const char *mimetype) {
     size_t i;
     assert(strlen(extension) > 0);
     assert(strlen(mimetype) > 0);
 
     /* update longest_ext */
     i = strlen(extension);
-    if (i > longest_ext) longest_ext = i;
+    if (i > longest_ext)
+        longest_ext = i;
 
     /* look through list and replace an existing entry if possible */
     for (i=0; i<mime_map_size; i++)
-        if (strcmp(mime_map[i].extension, extension) == 0)
-        {
+        if (strcmp(mime_map[i].extension, extension) == 0) {
             free(mime_map[i].mimetype);
             mime_map[i].mimetype = xstrdup(mimetype);
             return;
@@ -641,25 +585,18 @@ static void add_mime_mapping(const char *extension, const char *mimetype)
     mime_map[mime_map_size-1].mimetype = xstrdup(mimetype);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * qsort() the mime_map.  The map must be sorted before it can be searched
- * through.
+/* qsort() the mime_map.  The map must be sorted before it can be
+ * binary-searched.
  */
-static int mime_mapping_cmp(const void *a, const void *b)
-{
+static int mime_mapping_cmp(const void *a, const void *b) {
     return strcmp( ((const struct mime_mapping *)a)->extension,
                    ((const struct mime_mapping *)b)->extension );
 }
 
-static void sort_mime_map(void)
-{
+static void sort_mime_map(void) {
     qsort(mime_map, mime_map_size, sizeof(struct mime_mapping),
         mime_mapping_cmp);
 }
-
-
 
 /* ---------------------------------------------------------------------------
  * Parses a mime.types line and adds the parsed data to the mime_map.
