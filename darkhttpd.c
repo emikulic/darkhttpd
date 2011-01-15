@@ -259,8 +259,7 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0;
-static uint32_t num_requests = 0;
-static uint64_t total_in = 0, total_out = 0;
+static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 
 static int running = 1; /* signal handler sets this to false */
 
@@ -2242,16 +2241,15 @@ static void poll_send_reply(struct connection *conn)
         (long long)conn->reply_length);
 
     /* handle any errors (-1) or closure (0) in send() */
-    if (sent < 1)
-    {
-        if (sent == -1)
-        {
+    if (sent < 1) {
+        if (sent == -1) {
             if (errno == EAGAIN) {
-                if (debug) printf("poll_send_reply would have blocked\n");
+                if (debug)
+                    printf("poll_send_reply would have blocked\n");
                 return;
             }
-            if (debug) printf("send(%d) error: %s\n",
-                conn->socket, strerror(errno));
+            if (debug)
+                printf("send(%d) error: %s\n", conn->socket, strerror(errno));
         }
         else if (sent == 0)
         {
@@ -2262,8 +2260,8 @@ static void poll_send_reply(struct connection *conn)
         return;
     }
     conn->reply_sent += sent;
-    conn->total_sent += sent;
-    total_out += sent;
+    conn->total_sent += (size_t)sent;
+    total_out += (size_t)sent;
 
     /* check if we're done sending */
     if (conn->reply_sent == conn->reply_length) conn->state = DONE;
