@@ -93,6 +93,7 @@ static const int debug = 1;
 /* [<-] */
 
 CTASSERT(sizeof(unsigned long long) >= sizeof(off_t));
+#define llu(x) ((unsigned long long)(x))
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
 #include <err.h>
@@ -1091,7 +1092,7 @@ static void log_connection(const struct connection *conn) {
     fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
         (unsigned long int)now, inet_ntoa(inaddr),
         conn->method, conn->uri,
-        conn->http_code, (unsigned long long)conn->total_sent,
+        conn->http_code, llu(conn->total_sent),
         (conn->referer == NULL)?"":conn->referer,
         (conn->user_agent == NULL)?"":conn->user_agent
         );
@@ -1188,11 +1189,10 @@ static char *rfc1123_date(char *dest, const time_t when) {
  * character it represents.  Don't forget to free the return value.
  */
 static char *urldecode(const char *url) {
-    size_t len = strlen(url);
+    size_t i, pos, len = strlen(url);
     char *out = xmalloc(len+1);
-    int pos;
 
-    for (size_t i = 0, pos = 0; i < len; i++) {
+    for (i = 0, pos = 0; i < len; i++) {
         if ((url[i] == '%') && (i+2 < len) &&
             isxdigit(url[i+1]) && isxdigit(url[i+2])) {
             /* decode %XX */
@@ -1214,12 +1214,12 @@ static char *urldecode(const char *url) {
     return out;
 }
 
-/* ---------------------------------------------------------------------------
- * A default reply for any (erroneous) occasion.
- */
+/* A default reply for any (erroneous) occasion. */
 static void default_reply(struct connection *conn,
-    const int errcode, const char *errname, const char *format, ...)
-{
+        const int errcode, const char *errname, const char *format, ...)
+        __printflike(4, 5);
+static void default_reply(struct connection *conn,
+        const int errcode, const char *errname, const char *format, ...) {
     char *reason, date[DATE_LEN];
     va_list va;
 
@@ -1245,23 +1245,19 @@ static void default_reply(struct connection *conn,
      "Date: %s\r\n"
      "Server: %s\r\n"
      "%s" /* keep-alive */
-     "Content-Length: %d\r\n"
+     "Content-Length: %llu\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
      errcode, errname, date, pkgname, keep_alive(conn),
-     conn->reply_length);
+     llu(conn->reply_length));
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = errcode;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Redirection.
- */
 static void redirect(struct connection *conn, const char *format, ...)
-{
+    __printflike(2, 3);
+static void redirect(struct connection *conn, const char *format, ...) {
     char *where, date[DATE_LEN];
     va_list va;
 
@@ -1287,76 +1283,69 @@ static void redirect(struct connection *conn, const char *format, ...)
      "Server: %s\r\n"
      "Location: %s\r\n"
      "%s" /* keep-alive */
-     "Content-Length: %d\r\n"
+     "Content-Length: %llu\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
-     date, pkgname, where, keep_alive(conn), conn->reply_length);
+     date, pkgname, where, keep_alive(conn), llu(conn->reply_length));
 
     free(where);
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = 301;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Parses a single HTTP request field.  Returns string from end of [field] to
+/* Parses a single HTTP request field.  Returns string from end of [field] to
  * first \r, \n or end of request string.  Returns NULL if [field] can't be
  * matched.
  *
  * You need to remember to deallocate the result.
  * example: parse_field(conn, "Referer: ");
  */
-static char *parse_field(const struct connection *conn, const char *field)
-{
+static char *parse_field(const struct connection *conn, const char *field) {
     size_t bound1, bound2;
     char *pos;
 
     /* find start */
     pos = strstr(conn->request, field);
-    if (pos == NULL) return NULL;
-    bound1 = pos - conn->request + strlen(field);
+    if (pos == NULL)
+        return NULL;
+    assert(pos >= conn->request);
+    bound1 = (size_t)(pos - conn->request) + strlen(field);
 
     /* find end */
     for (bound2 = bound1;
-        conn->request[bound2] != '\r' &&
-        bound2 < conn->request_length; bound2++)
+        (conn->request[bound2] != '\r') &&
+        (bound2 < conn->request_length); bound2++)
             ;
 
     /* copy to buffer */
     return split_string(conn->request, bound1, bound2);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Parse a Range: field into range_begin and range_end.  Only handles the
+/* Parse a Range: field into range_begin and range_end.  Only handles the
  * first range if a list is given.  Sets range_{begin,end}_given to 1 if
  * either part of the range is given.
  */
-static void parse_range_field(struct connection *conn)
-{
+static void parse_range_field(struct connection *conn) {
     size_t bound1, bound2, len;
     char *range;
 
     range = parse_field(conn, "Range: bytes=");
-    if (range == NULL) return;
+    if (range == NULL)
+        return;
     len = strlen(range);
 
-    do /* break handling */
-    {
+    do {
         /* parse number up to hyphen */
         bound1 = 0;
         for (bound2=0;
-            isdigit( (int)range[bound2] ) && bound2 < len;
+            isdigit((int)range[bound2]) && (bound2 < len);
             bound2++)
                 ;
 
-        if (bound2 == len || range[bound2] != '-')
+        if ((bound2 == len) || (range[bound2] != '-'))
             break; /* there must be a hyphen here */
 
-        if (bound1 != bound2)
-        {
+        if (bound1 != bound2) {
             conn->range_begin_given = 1;
             conn->range_begin = (off_t)strtoll(range+bound1, NULL, 10);
         }
@@ -1364,89 +1353,94 @@ static void parse_range_field(struct connection *conn)
         /* parse number after hyphen */
         bound2++;
         for (bound1=bound2;
-            isdigit( (int)range[bound2] ) && bound2 < len;
+            isdigit((int)range[bound2]) && (bound2 < len);
             bound2++)
                 ;
 
-        if (bound2 != len && range[bound2] != ',')
+        if ((bound2 != len) && (range[bound2] != ','))
             break; /* must be end of string or a list to be valid */
 
-        if (bound1 != bound2)
-        {
+        if (bound1 != bound2) {
             conn->range_end_given = 1;
             conn->range_end = (off_t)strtoll(range+bound1, NULL, 10);
         }
-    }
-    while(0); /* break handling */
+    } while(0); /* break handling */
     free(range);
 
     /* sanity check: begin <= end */
     if (conn->range_begin_given && conn->range_end_given &&
-        (conn->range_begin > conn->range_end))
-    {
+            (conn->range_begin > conn->range_end)) {
         conn->range_begin_given = conn->range_end_given = 0;
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
+/* Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
  * url (/), the referer (if given) and the user-agent (if given).  Remember to
  * deallocate all these buffers.  The method will be returned in uppercase.
  */
-static int parse_request(struct connection *conn)
-{
+static int parse_request(struct connection *conn) {
     size_t bound1, bound2;
     char *tmp;
     assert(conn->request_length == strlen(conn->request));
 
     /* parse method */
-    for (bound1 = 0; bound1 < conn->request_length &&
-        conn->request[bound1] != ' '; bound1++)
+    for (bound1 = 0;
+        (bound1 < conn->request_length) &&
+        (conn->request[bound1] != ' ');
+        bound1++)
             ;
 
     conn->method = split_string(conn->request, 0, bound1);
     strntoupper(conn->method, bound1);
 
     /* parse uri */
-    for (; bound1 < conn->request_length &&
-        conn->request[bound1] == ' '; bound1++)
+    for (;
+        (bound1 < conn->request_length) &&
+        (conn->request[bound1] == ' ');
+        bound1++)
             ;
 
-    if (bound1 == conn->request_length) return 0; /* fail */
+    if (bound1 == conn->request_length)
+        return 0; /* fail */
 
-    for (bound2=bound1+1; bound2 < conn->request_length &&
-        conn->request[bound2] != ' ' &&
-        conn->request[bound2] != '\r'; bound2++)
+    for (bound2 = bound1 + 1;
+        (bound2 < conn->request_length) &&
+        (conn->request[bound2] != ' ') &&
+        (conn->request[bound2] != '\r');
+        bound2++)
             ;
 
     conn->uri = split_string(conn->request, bound1, bound2);
 
     /* parse protocol to determine conn_close */
-    if (conn->request[bound2] == ' ')
-    {
+    if (conn->request[bound2] == ' ') {
         char *proto;
-        for (bound1 = bound2; bound1 < conn->request_length &&
-            conn->request[bound1] == ' '; bound1++)
+        for (bound1 = bound2;
+            (bound1 < conn->request_length) &&
+            (conn->request[bound1] == ' ');
+            bound1++)
                 ;
 
-        for (bound2=bound1+1; bound2 < conn->request_length &&
-            conn->request[bound2] != ' ' &&
-            conn->request[bound2] != '\r'; bound2++)
+        for (bound2 = bound1 + 1;
+            (bound2 < conn->request_length) &&
+            (conn->request[bound2] != ' ') &&
+            (conn->request[bound2] != '\r');
+            bound2++)
                 ;
 
         proto = split_string(conn->request, bound1, bound2);
-        if (strcasecmp(proto, "HTTP/1.1") == 0) conn->conn_close = 0;
+        if (strcasecmp(proto, "HTTP/1.1") == 0)
+            conn->conn_close = 0;
         free(proto);
     }
 
     /* parse connection field */
     tmp = parse_field(conn, "Connection: ");
-    if (tmp != NULL)
-    {
-        if (strcasecmp(tmp, "close") == 0) conn->conn_close = 1;
-        else if (strcasecmp(tmp, "keep-alive") == 0) conn->conn_close = 0;
+    if (tmp != NULL) {
+        if (strcasecmp(tmp, "close") == 0)
+            conn->conn_close = 1;
+        else if (strcasecmp(tmp, "keep-alive") == 0)
+            conn->conn_close = 0;
         free(tmp);
     }
 
@@ -1457,13 +1451,7 @@ static int parse_request(struct connection *conn)
     return 1;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Check if a file exists.
- */
-static int file_exists(const char *path)
-{
+static int file_exists(const char *path) {
     struct stat filestat;
     if ((stat(path, &filestat) == -1) && (errno = ENOENT))
         return 0;
@@ -1471,27 +1459,21 @@ static int file_exists(const char *path)
         return 1;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Make sorted list of files in a directory.  Returns number of entries, or -1
- * if error occurs.
- */
-struct dlent
-{
+struct dlent {
     char *name;
     int is_dir;
     off_t size;
 };
 
-static int dlent_cmp(const void *a, const void *b)
-{
-    return strcmp( (*((const struct dlent * const *)a))->name,
-                   (*((const struct dlent * const *)b))->name );
+static int dlent_cmp(const void *a, const void *b) {
+    return strcmp((*((const struct dlent * const *)a))->name,
+                  (*((const struct dlent * const *)b))->name);
 }
 
-static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output)
-{
+/* Make sorted list of files in a directory.  Returns number of entries, or -1
+ * if error occurs.
+ */
+static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     DIR *dir;
     struct dirent *ent;
     size_t entries = 0, pool = 0;
@@ -1500,67 +1482,57 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output)
     struct dlent **list = NULL;
 
     dir = opendir(path);
-    if (dir == NULL) return -1;
+    if (dir == NULL)
+        return -1;
 
     currname = xmalloc(strlen(path) + MAXNAMLEN + 1);
 
     /* construct list */
-    while ((ent = readdir(dir)) != NULL)
-    {
+    while ((ent = readdir(dir)) != NULL) {
         struct stat s;
 
-        if (ent->d_name[0] == '.' && ent->d_name[1] == '\0')
+        if ((ent->d_name[0] == '.') && (ent->d_name[1] == '\0'))
             continue; /* skip "." */
         assert(strlen(ent->d_name) <= MAXNAMLEN);
         sprintf(currname, "%s%s", path, ent->d_name);
         if (stat(currname, &s) == -1)
             continue; /* skip un-stat-able files */
-
-        if (entries == pool)
-        {
+        if (entries == pool) {
             pool += POOL_INCR;
             list = xrealloc(list, sizeof(struct dlent*) * pool);
         }
-
         list[entries] = xmalloc(sizeof(struct dlent));
         list[entries]->name = xstrdup(ent->d_name);
         list[entries]->is_dir = S_ISDIR(s.st_mode);
         list[entries]->size = s.st_size;
         entries++;
     }
-
-    (void)closedir(dir); /* can't error out if opendir() succeeded */
-
+    closedir(dir);
     free(currname);
     qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
     *output = xrealloc(list, sizeof(struct dlent*) * entries);
-    return entries;
+    return (ssize_t)entries;
     #undef POOL_INCR
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Cleanly deallocate a sorted list of directory files.
- */
-static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size)
-{
+/* Cleanly deallocate a sorted list of directory files. */
+static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size) {
     ssize_t i;
-    for (i=0; i<size; i++)
-    {
+
+    for (i = 0; i < size; i++) {
         free(list[i]->name);
         free(list[i]);
     }
 }
 
 /* Should this character be urlencoded (according to RFC1738).
- * Contirubted by nf.
+ * Contributed by nf.
  */
-static int needs_urlencoding(char c) {
-    int i;
+static int needs_urlencoding(unsigned char c) {
+    unsigned int i;
     static const char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
 
-    for (i=0; i<sizeof(bad)-1; i++)
+    for (i = 0; i < sizeof(bad) - 1; i++)
         if (c == bad[i])
             return 1;
 
@@ -1572,16 +1544,14 @@ static int needs_urlencoding(char c) {
 }
 
 /* Encode filename to be an RFC1738-compliant URL part.
- * Contributed by nf
+ * Contributed by nf.
  */
 static void urlencode_filename(char *name, char *safe_url) {
     static const char hex[] = "0123456789ABCDEF";
     int i, j;
 
-    for (i = j = 0; name[i] != '\0'; i++)
-    {
-        if (needs_urlencoding(name[i]))
-        {
+    for (i = j = 0; name[i] != '\0'; i++) {
+        if (needs_urlencoding((unsigned char)name[i])) {
             safe_url[j++] = '%';
             safe_url[j++] = hex[(name[i] >> 4) & 0xF];
             safe_url[j++] = hex[ name[i]       & 0xF];
@@ -1589,15 +1559,10 @@ static void urlencode_filename(char *name, char *safe_url) {
         else
             safe_url[j++] = name[i];
     }
-
     safe_url[j] = '\0';
 }
 
-/* ---------------------------------------------------------------------------
- * Generate directory listing.
- */
-static void generate_dir_listing(struct connection *conn, const char *path)
-{
+static void generate_dir_listing(struct connection *conn, const char *path) {
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
@@ -1606,17 +1571,16 @@ static void generate_dir_listing(struct connection *conn, const char *path)
     struct apbuf *listing = make_apbuf();
 
     listsize = make_sorted_dirlist(path, &list);
-    if (listsize == -1)
-    {
+    if (listsize == -1) {
         default_reply(conn, 500, "Internal Server Error",
-            "Couldn't list directory: %s", strerror(errno));
+                      "Couldn't list directory: %s", strerror(errno));
         return;
     }
 
-    for (i=0; i<listsize; i++)
-    {
+    for (i=0; i<listsize; i++) {
         size_t tmp = strlen(list[i]->name);
-        if (maxlen < tmp) maxlen = tmp;
+        if (maxlen < tmp)
+            maxlen = tmp;
     }
 
     append(listing, "<html>\n<head>\n <title>");
@@ -1628,8 +1592,7 @@ static void generate_dir_listing(struct connection *conn, const char *path)
     spaces = xmalloc(maxlen);
     memset(spaces, ' ', maxlen);
 
-    for (i=0; i<listsize; i++)
-    {
+    for (i=0; i<listsize; i++) {
         /* If a filename is made up of entirely unsafe chars,
          * the url would be three times its original length.
          */
@@ -1645,10 +1608,9 @@ static void generate_dir_listing(struct connection *conn, const char *path)
 
         if (list[i]->is_dir)
             append(listing, "/\n");
-        else
-        {
+        else {
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
-            appendf(listing, "%10lld\n", (long long)list[i]->size);
+            appendf(listing, "%10llu\n", llu(list[i]->size));
         }
     }
 
@@ -1675,22 +1637,17 @@ static void generate_dir_listing(struct connection *conn, const char *path)
      "Date: %s\r\n"
      "Server: %s\r\n"
      "%s" /* keep-alive */
-     "Content-Length: %u\r\n"
+     "Content-Length: %llu\r\n"
      "Content-Type: text/html\r\n"
      "\r\n",
-     date, pkgname, keep_alive(conn), conn->reply_length);
+     date, pkgname, keep_alive(conn), llu(conn->reply_length));
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = 200;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Process a GET/HEAD request
- */
-static void process_get(struct connection *conn)
-{
+/* Process a GET/HEAD request. */
+static void process_get(struct connection *conn) {
     char *decoded_url, *target, *if_mod_since;
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
@@ -1702,17 +1659,15 @@ static void process_get(struct connection *conn)
     /* make sure it's safe */
     if (make_safe_uri(decoded_url) == NULL) {
         default_reply(conn, 400, "Bad Request",
-            "You requested an invalid URI: %s", conn->uri);
+                      "You requested an invalid URI: %s", conn->uri);
         free(decoded_url);
         return;
     }
 
     /* does it end in a slash? serve up url/index_name */
-    if (decoded_url[strlen(decoded_url)-1] == '/')
-    {
+    if (decoded_url[strlen(decoded_url)-1] == '/') {
         xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
-        if (!file_exists(target))
-        {
+        if (!file_exists(target)) {
             free(target);
             xasprintf(&target, "%s%s", wwwroot, decoded_url);
             generate_dir_listing(conn, target);
@@ -1722,21 +1677,21 @@ static void process_get(struct connection *conn)
         }
         mimetype = uri_content_type(index_name);
     }
-    else /* points to a file */
-    {
+    else {
+        /* points to a file */
         xasprintf(&target, "%s%s", wwwroot, decoded_url);
         mimetype = uri_content_type(decoded_url);
     }
     free(decoded_url);
-    if (debug) printf("uri=%s, target=%s, content-type=%s\n",
-        conn->uri, target, mimetype);
+    if (debug)
+        printf("uri=%s, target=%s, content-type=%s\n",
+               conn->uri, target, mimetype);
 
     /* open file */
     conn->reply_fd = open(target, O_RDONLY | O_NONBLOCK);
     free(target);
 
-    if (conn->reply_fd == -1)
-    {
+    if (conn->reply_fd == -1) {
         /* open() failed */
         if (errno == EACCES)
             default_reply(conn, 403, "Forbidden",
@@ -1753,34 +1708,31 @@ static void process_get(struct connection *conn)
     }
 
     /* stat the file */
-    if (fstat(conn->reply_fd, &filestat) == -1)
-    {
+    if (fstat(conn->reply_fd, &filestat) == -1) {
         default_reply(conn, 500, "Internal Server Error",
             "fstat() failed: %s.", strerror(errno));
         return;
     }
 
     /* make sure it's a regular file */
-    if (S_ISDIR(filestat.st_mode))
-    {
+    if (S_ISDIR(filestat.st_mode)) {
         redirect(conn, "%s/", conn->uri);
         return;
     }
-    else if (!S_ISREG(filestat.st_mode))
-    {
+    else if (!S_ISREG(filestat.st_mode)) {
         default_reply(conn, 403, "Forbidden", "Not a regular file.");
         return;
     }
 
     conn->reply_type = REPLY_FROMFILE;
-    (void) rfc1123_date(lastmod, filestat.st_mtime);
+    rfc1123_date(lastmod, filestat.st_mtime);
 
     /* check for If-Modified-Since, may not have to send */
     if_mod_since = parse_field(conn, "If-Modified-Since: ");
-    if (if_mod_since != NULL &&
-        strcmp(if_mod_since, lastmod) == 0)
-    {
-        if (debug) printf("not modified since %s\n", if_mod_since);
+    if ((if_mod_since != NULL) &&
+            (strcmp(if_mod_since, lastmod) == 0)) {
+        if (debug)
+            printf("not modified since %s\n", if_mod_since);
         default_reply(conn, 304, "Not Modified", "");
         conn->header_only = 1;
         free(if_mod_since);
@@ -1788,12 +1740,10 @@ static void process_get(struct connection *conn)
     }
     free(if_mod_since);
 
-    if (conn->range_begin_given || conn->range_end_given)
-    {
+    if (conn->range_begin_given || conn->range_end_given) {
         off_t from, to;
 
-        if (conn->range_begin_given && conn->range_end_given)
-        {
+        if (conn->range_begin_given && conn->range_end_given) {
             /* 100-200 */
             from = conn->range_begin;
             to = conn->range_end;
@@ -1802,14 +1752,12 @@ static void process_get(struct connection *conn)
             if (to > (size_t)(filestat.st_size-1))
                 to = filestat.st_size-1;
         }
-        else if (conn->range_begin_given && !conn->range_end_given)
-        {
+        else if (conn->range_begin_given && !conn->range_end_given) {
             /* 100- :: yields 100 to end */
             from = conn->range_begin;
             to = filestat.st_size-1;
         }
-        else if (!conn->range_begin_given && conn->range_end_given)
-        {
+        else if (!conn->range_begin_given && conn->range_end_given) {
             /* -200 :: yields last 200 */
             to = filestat.st_size-1;
             from = to - conn->range_end + 1;
@@ -1817,7 +1765,8 @@ static void process_get(struct connection *conn)
             /* check for wrapping */
             if (from > to) from = 0;
         }
-        else errx(1, "internal error - from/to mismatch");
+        else
+            errx(1, "internal error - from/to mismatch");
 
         conn->reply_start = from;
         conn->reply_length = to - from + 1;
@@ -1827,80 +1776,68 @@ static void process_get(struct connection *conn)
             "Date: %s\r\n"
             "Server: %s\r\n"
             "%s" /* keep-alive */
-            "Content-Length: %lld\r\n"
-            "Content-Range: bytes %lld-%lld/%lld\r\n"
+            "Content-Length: %llu\r\n"
+            "Content-Range: bytes %llu-%llu/%llu\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), pkgname, keep_alive(conn),
-            (long long)conn->reply_length, (long long)from, (long long)to,
-            (long long)filestat.st_size,
-            mimetype, lastmod
+            llu(conn->reply_length), llu(from), llu(to),
+            llu(filestat.st_size), mimetype, lastmod
         );
         conn->http_code = 206;
-        if (debug) printf("sending %lld-%lld/%lld\n",
-            (long long)from, (long long)to,
-            (long long)filestat.st_size);
+        if (debug)
+            printf("sending %llu-%llu/%llu\n",
+                   llu(from), llu(to), llu(filestat.st_size));
     }
-    else /* no range stuff */
-    {
+    else {
+        /* no range stuff */
         conn->reply_length = filestat.st_size;
-
         conn->header_length = xasprintf(&(conn->header),
             "HTTP/1.1 200 OK\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
             "%s" /* keep-alive */
-            "Content-Length: %lld\r\n"
+            "Content-Length: %llu\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), pkgname, keep_alive(conn),
-            (long long)conn->reply_length, mimetype, lastmod
+            llu(conn->reply_length), mimetype, lastmod
         );
         conn->http_code = 200;
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Process a request: build the header and reply, advance state.
- */
-static void process_request(struct connection *conn)
-{
+/* Process a request: build the header and reply, advance state. */
+static void process_request(struct connection *conn) {
     num_requests++;
-    if (!parse_request(conn))
-    {
+    if (!parse_request(conn)) {
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
     }
-    else if (strcmp(conn->method, "GET") == 0)
-    {
+    else if (strcmp(conn->method, "GET") == 0) {
         process_get(conn);
     }
-    else if (strcmp(conn->method, "HEAD") == 0)
-    {
+    else if (strcmp(conn->method, "HEAD") == 0) {
         process_get(conn);
         conn->header_only = 1;
     }
-    else if (strcmp(conn->method, "OPTIONS") == 0 ||
-             strcmp(conn->method, "POST") == 0 ||
-             strcmp(conn->method, "PUT") == 0 ||
-             strcmp(conn->method, "DELETE") == 0 ||
-             strcmp(conn->method, "TRACE") == 0 ||
-             strcmp(conn->method, "CONNECT") == 0)
-    {
+    else if ((strcmp(conn->method, "OPTIONS") == 0) ||
+             (strcmp(conn->method, "POST") == 0) ||
+             (strcmp(conn->method, "PUT") == 0) ||
+             (strcmp(conn->method, "DELETE") == 0) ||
+             (strcmp(conn->method, "TRACE") == 0) ||
+             (strcmp(conn->method, "CONNECT") == 0)) {
         default_reply(conn, 501, "Not Implemented",
-            "The method you specified (%s) is not implemented.",
-            conn->method);
+                      "The method you specified (%s) is not implemented.",
+                      conn->method);
     }
-    else
-    {
+    else {
         default_reply(conn, 400, "Bad Request",
-            "%s is not a valid HTTP/1.1 method.", conn->method);
+                      "%s is not a valid HTTP/1.1 method.", conn->method);
     }
 
     /* advance state */
@@ -1911,21 +1848,17 @@ static void process_request(struct connection *conn)
     conn->request = NULL; /* important: don't free it again later */
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Receiving request.
- */
-static void poll_recv_request(struct connection *conn)
-{
+/* Receiving request. */
+static void poll_recv_request(struct connection *conn) {
     #define BUFSIZE 65536
     char buf[BUFSIZE];
     ssize_t recvd;
 
     assert(conn->state == RECV_REQUEST);
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
-    if (debug) printf("poll_recv_request(%d) got %d bytes\n",
-        conn->socket, (int)recvd);
+    if (debug)
+        printf("poll_recv_request(%d) got %d bytes\n",
+               conn->socket, (int)recvd);
     if (recvd < 1) {
         if (recvd == -1) {
             if (errno == EAGAIN) {
@@ -1944,8 +1877,8 @@ static void poll_recv_request(struct connection *conn)
 
     /* append to conn->request */
     assert(recvd > 0);
-    conn->request = xrealloc(conn->request,
-        conn->request_length + (size_t)recvd + 1);
+    conn->request = xrealloc(
+        conn->request, conn->request_length + (size_t)recvd + 1);
     memcpy(conn->request+conn->request_length, buf, (size_t)recvd);
     conn->request_length += (size_t)recvd;
     conn->request[conn->request_length] = 0;
@@ -1959,11 +1892,10 @@ static void poll_recv_request(struct connection *conn)
         (memcmp(conn->request+conn->request_length-4, "\r\n\r\n", 4) == 0))
             process_request(conn);
 
-    /* die if it's too long */
-    if (conn->request_length > MAX_REQUEST_LENGTH)
-    {
+    /* die if it's too large */
+    if (conn->request_length > MAX_REQUEST_LENGTH) {
         default_reply(conn, 413, "Request Entity Too Large",
-            "Your request was dropped because it was too long.");
+                      "Your request was dropped because it was too long.");
         conn->state = SEND_HEADER;
     }
 
@@ -1974,23 +1906,21 @@ static void poll_recv_request(struct connection *conn)
         poll_send_header(conn);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Sending header.  Assumes conn->header is not NULL.
- */
-static void poll_send_header(struct connection *conn)
-{
+/* Sending header.  Assumes conn->header is not NULL. */
+static void poll_send_header(struct connection *conn) {
     ssize_t sent;
 
     assert(conn->state == SEND_HEADER);
     assert(conn->header_length == strlen(conn->header));
 
-    sent = send(conn->socket, conn->header + conn->header_sent,
-        conn->header_length - conn->header_sent, 0);
+    sent = send(conn->socket,
+                conn->header + conn->header_sent,
+                conn->header_length - conn->header_sent,
+                0);
     conn->last_active = now;
-    if (debug) printf("poll_send_header(%d) sent %d bytes\n",
-        conn->socket, (int)sent);
+    if (debug)
+        printf("poll_send_header(%d) sent %d bytes\n",
+               conn->socket, (int)sent);
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1) {
@@ -2010,8 +1940,7 @@ static void poll_send_header(struct connection *conn)
     total_out += (size_t)sent;
 
     /* check if we're done sending header */
-    if (conn->header_sent == conn->header_length)
-    {
+    if (conn->header_sent == conn->header_length) {
         if (conn->header_only)
             conn->state = DONE;
         else {
@@ -2024,17 +1953,13 @@ static void poll_send_header(struct connection *conn)
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Send chunk on socket <s> from FILE *fp, starting at <ofs> and of size
+/* Send chunk on socket <s> from FILE *fp, starting at <ofs> and of size
  * <size>.  Use sendfile() if possible since it's zero-copy on some platforms.
  * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
  * read error.
  */
 static ssize_t send_from_file(const int s, const int fd,
-    off_t ofs, size_t size)
-{
+        off_t ofs, size_t size) {
 #ifdef __FreeBSD__
     off_t sent;
     int ret = sendfile(fd, s, ofs, size, NULL, &sent, 0);
@@ -2065,20 +1990,18 @@ static ssize_t send_from_file(const int s, const int fd,
     ssize_t numread;
     #undef BUFSIZE
 
-    if (lseek(fd, ofs, SEEK_SET) == -1) err(1, "fseek(%d)", (int)ofs);
+    if (lseek(fd, ofs, SEEK_SET) == -1)
+        err(1, "fseek(%d)", (int)ofs);
     numread = read(fd, buf, amount);
-    if (numread == 0)
-    {
+    if (numread == 0) {
         fprintf(stderr, "premature eof on fd %d\n", fd);
         return -1;
     }
-    else if (numread == -1)
-    {
+    else if (numread == -1) {
         fprintf(stderr, "error reading on fd %d: %s", fd, strerror(errno));
         return -1;
     }
-    else if ((size_t)numread != amount)
-    {
+    else if ((size_t)numread != amount) {
         fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
             numread, amount, fd);
         return -1;
@@ -2089,26 +2012,20 @@ static ssize_t send_from_file(const int s, const int fd,
 #endif
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Sending reply.
- */
+/* Sending reply. */
 static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
 
     assert(conn->state == SEND_REPLY);
     assert(!conn->header_only);
-    if (conn->reply_type == REPLY_GENERATED)
-    {
+    if (conn->reply_type == REPLY_GENERATED) {
         assert(conn->reply_length >= conn->reply_sent);
         sent = send(conn->socket,
             conn->reply + conn->reply_start + conn->reply_sent,
             (size_t)(conn->reply_length - conn->reply_sent), 0);
     }
-    else
-    {
+    else {
         errno = 0;
         assert(conn->reply_length >= conn->reply_sent);
         sent = send_from_file(conn->socket, conn->reply_fd,
@@ -2119,11 +2036,11 @@ static void poll_send_reply(struct connection *conn)
                 (long long)sent, errno, strerror(errno));
     }
     conn->last_active = now;
-    if (debug) printf("poll_send_reply(%d) sent %d: %lld+[%lld-%lld] of %lld\n",
-        conn->socket, (int)sent, (long long)conn->reply_start,
-        (long long)conn->reply_sent,
-        (long long)(conn->reply_sent + sent - 1),
-        (long long)conn->reply_length);
+    if (debug)
+        printf("poll_send_reply(%d) sent %d: %lld+[%lld-%lld] of %lld\n",
+               conn->socket, (int)sent, llu(conn->reply_start),
+               llu(conn->reply_sent), llu(conn->reply_sent + sent - 1),
+               llu(conn->reply_length));
 
     /* handle any errors (-1) or closure (0) in send() */
     if (sent < 1) {
@@ -2136,9 +2053,9 @@ static void poll_send_reply(struct connection *conn)
             if (debug)
                 printf("send(%d) error: %s\n", conn->socket, strerror(errno));
         }
-        else if (sent == 0)
-        {
-            if (debug) printf("send(%d) closure\n", conn->socket);
+        else if (sent == 0) {
+            if (debug)
+                printf("send(%d) closure\n", conn->socket);
         }
         conn->conn_close = 1;
         conn->state = DONE;
@@ -2149,10 +2066,9 @@ static void poll_send_reply(struct connection *conn)
     total_out += (size_t)sent;
 
     /* check if we're done sending */
-    if (conn->reply_sent == conn->reply_length) conn->state = DONE;
+    if (conn->reply_sent == conn->reply_length)
+        conn->state = DONE;
 }
-
-
 
 /* ---------------------------------------------------------------------------
  * Main loop of the httpd - a select() and then delegation to accept
