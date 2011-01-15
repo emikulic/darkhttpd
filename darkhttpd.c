@@ -751,19 +751,18 @@ static int mime_mapping_cmp_str(const void *a, const void *b) {
 }
 
 static const char *uri_content_type(const char *uri) {
-    size_t period, urilen = strlen(uri);
+    int period, urilen = (int)strlen(uri);
 
-    period = urilen;
-    while ((period > 0) &&
-           (uri[period] != '.') &&
-           ((urilen - period - 1) <= longest_ext))
-        period--;
+    for (period = urilen - 1;
+         (period > 0) && (uri[period] != '.') &&
+         (urilen - period - 1 <= (int)longest_ext);
+         period--)
+            ;
 
-    if (uri[period] == '.') {
+    if ((period >= 0) && (uri[period] == '.')) {
         struct mime_mapping *result =
             bsearch((uri + period + 1), mime_map, mime_map_size,
                     sizeof(struct mime_mapping), mime_mapping_cmp_str);
-
         if (result != NULL) {
             assert(strcmp(uri + period + 1, result->extension) == 0);
             return result->mimetype;
