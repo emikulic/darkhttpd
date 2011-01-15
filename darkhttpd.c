@@ -929,7 +929,7 @@ static void parse_commandline(const int argc, char *argv[]) {
         if (strcmp(argv[i], "--port") == 0) {
             if (++i >= argc)
                 errx(1, "missing number after --port");
-            bindport = atoi(argv[i]);
+            bindport = (uint16_t)atoi(argv[i]);
         }
         else if (strcmp(argv[i], "--addr") == 0) {
             if (++i >= argc)
@@ -1158,7 +1158,7 @@ static void strntoupper(char *str, const size_t length) {
     size_t i;
 
     for (i = 0; i < length; i++)
-        str[i] = toupper(str[i]);
+        str[i] = (char)toupper(str[i]);
 }
 
 /* If a connection has been idle for more than idletime seconds, it will be
