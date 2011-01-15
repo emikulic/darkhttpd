@@ -255,7 +255,7 @@ static time_t now;
 
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
-static unsigned short bindport = 80;
+static uint16_t bindport = 80;
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 
@@ -560,7 +560,7 @@ static char *make_safe_uri(char *uri) {
  * unsorted order.  Makes copies of extension and mimetype strings.
  */
 static void add_mime_mapping(const char *extension, const char *mimetype) {
-    size_t i;
+    unsigned int i;
     assert(strlen(extension) > 0);
     assert(strlen(mimetype) > 0);
 
@@ -589,8 +589,8 @@ static void add_mime_mapping(const char *extension, const char *mimetype) {
  * binary-searched.
  */
 static int mime_mapping_cmp(const void *a, const void *b) {
-    return strcmp( ((const struct mime_mapping *)a)->extension,
-                   ((const struct mime_mapping *)b)->extension );
+    return strcmp(((const struct mime_mapping *)a)->extension,
+                  ((const struct mime_mapping *)b)->extension);
 }
 
 static void sort_mime_map(void) {
@@ -598,42 +598,42 @@ static void sort_mime_map(void) {
         mime_mapping_cmp);
 }
 
-/* ---------------------------------------------------------------------------
- * Parses a mime.types line and adds the parsed data to the mime_map.
- */
-static void parse_mimetype_line(const char *line)
-{
+/* Parses a mime.types line and adds the parsed data to the mime_map. */
+static void parse_mimetype_line(const char *line) {
     unsigned int pad, bound1, lbound, rbound;
 
     /* parse mimetype */
-    for (pad=0; line[pad] == ' ' || line[pad] == '\t'; pad++);
+    for (pad=0; (line[pad] == ' ') || (line[pad] == '\t'); pad++)
+        ;
     if (line[pad] == '\0' || /* empty line */
         line[pad] == '#')    /* comment */
         return;
 
     for (bound1=pad+1;
-        line[bound1] != ' ' &&
-        line[bound1] != '\t';
-        bound1++)
-    {
-        if (line[bound1] == '\0') return; /* malformed line */
+        (line[bound1] != ' ') &&
+        (line[bound1] != '\t');
+        bound1++) {
+        if (line[bound1] == '\0')
+            return; /* malformed line */
     }
 
     lbound = bound1;
-    for (;;)
-    {
+    for (;;) {
         char *mimetype, *extension;
 
         /* find beginning of extension */
-        for (; line[lbound] == ' ' || line[lbound] == '\t'; lbound++);
-        if (line[lbound] == '\0') return; /* end of line */
+        for (; (line[lbound] == ' ') || (line[lbound] == '\t'); lbound++)
+            ;
+        if (line[lbound] == '\0')
+            return; /* end of line */
 
         /* find end of extension */
         for (rbound = lbound;
             line[rbound] != ' ' &&
             line[rbound] != '\t' &&
             line[rbound] != '\0';
-            rbound++);
+            rbound++)
+            ;
 
         mimetype = split_string(line, pad, bound1);
         extension = split_string(line, lbound, rbound);
@@ -641,147 +641,128 @@ static void parse_mimetype_line(const char *line)
         free(mimetype);
         free(extension);
 
-        if (line[rbound] == '\0') return; /* end of line */
-        else lbound = rbound + 1;
+        if (line[rbound] == '\0')
+            return; /* end of line */
+        else
+            lbound = rbound + 1;
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Adds contents of default_extension_map[] to mime_map list.  The array must
+/* Adds contents of default_extension_map[] to mime_map list.  The array must
  * be NULL terminated.
  */
-static void parse_default_extension_map(void)
-{
-    int i;
-
-    for (i=0; default_extension_map[i] != NULL; i++)
+static void parse_default_extension_map(void) {
+    for (unsigned int i=0; default_extension_map[i] != NULL; i++)
         parse_mimetype_line(default_extension_map[i]);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * read_line - read a line from [fp], return its contents in a
- * dynamically allocated buffer, not including the line ending.
+/* read a line from fp, return its contents in a dynamically allocated buffer,
+ * not including the line ending.
  *
  * Handles CR, CRLF and LF line endings, as well as NOEOL correctly.  If
  * already at EOF, returns NULL.  Will err() or errx() in case of
  * unexpected file error or running out of memory.
  */
-static char *read_line(FILE *fp)
-{
-   char *buf;
-   long startpos, endpos;
-   size_t linelen, numread;
-   int c;
+static char *read_line(FILE *fp) {
+    char *buf;
+    long startpos, endpos;
+    size_t linelen, numread;
+    int c;
 
-   startpos = ftell(fp);
-   if (startpos == -1) err(1, "ftell()");
+    startpos = ftell(fp);
+    if (startpos == -1)
+        err(1, "ftell()");
 
-   /* find end of line (or file) */
-   linelen = 0;
-   for (;;)
-   {
-      c = fgetc(fp);
-      if (c == EOF || c == (int)'\n' || c == (int)'\r') break;
-      linelen++;
-   }
+    /* find end of line (or file) */
+    linelen = 0;
+    for (;;) {
+        c = fgetc(fp);
+        if ((c == EOF) || (c == (int)'\n') || (c == (int)'\r'))
+            break;
+        linelen++;
+    }
 
-   /* return NULL on EOF (and empty line) */
-   if (linelen == 0 && c == EOF) return NULL;
+    /* return NULL on EOF (and empty line) */
+    if (linelen == 0 && c == EOF)
+        return NULL;
 
-   endpos = ftell(fp);
-   if (endpos == -1) err(1, "ftell()");
+    endpos = ftell(fp);
+    if (endpos == -1)
+        err(1, "ftell()");
 
-   /* skip CRLF */
-   if (c == (int)'\r' && fgetc(fp) == (int)'\n') endpos++;
+    /* skip CRLF */
+    if ((c == (int)'\r') && (fgetc(fp) == (int)'\n'))
+        endpos++;
 
-   buf = (char*)xmalloc(linelen + 1);
+    buf = xmalloc(linelen + 1);
 
-   /* rewind file to where the line stared and load the line */
-   if (fseek(fp, startpos, SEEK_SET) == -1) err(1, "fseek()");
-   numread = fread(buf, 1, linelen, fp);
-   if (numread != linelen)
-      errx(1, "fread() %u bytes, expecting %u bytes", numread, linelen);
+    /* rewind file to where the line stared and load the line */
+    if (fseek(fp, startpos, SEEK_SET) == -1)
+        err(1, "fseek()");
+    numread = fread(buf, 1, linelen, fp);
+    if (numread != linelen)
+        errx(1, "fread() %u bytes, expecting %u bytes", numread, linelen);
 
-   /* terminate buffer */
-   buf[linelen] = 0;
+    /* terminate buffer */
+    buf[linelen] = 0;
 
-   /* advance file pointer over the endline */
-   if (fseek(fp, endpos, SEEK_SET) == -1) err(1, "fseek()");
+    /* advance file pointer over the endline */
+    if (fseek(fp, endpos, SEEK_SET) == -1)
+        err(1, "fseek()");
 
-   return buf;
+    return buf;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Removes the ending newline in a string, if there is one.
- */
-static void chomp(char *str)
-{
-   size_t len = strlen(str);
-   if (len == 0) return;
-   if (str[len-1] == '\n') str[len-1] = '\0';
+/* Removes the ending newline in a string, if there is one. */
+static void chomp(char *str) {
+    size_t len = strlen(str);
+    if (len == 0)
+        return;
+    if (str[len - 1] == '\n')
+        str[len - 1] = '\0';
 }
-
-
 
 /* ---------------------------------------------------------------------------
  * Adds contents of specified file to mime_map list.
  */
-static void parse_extension_map_file(const char *filename)
-{
+static void parse_extension_map_file(const char *filename) {
     char *buf;
     FILE *fp = fopen(filename, "rb");
-    if (fp == NULL) err(1, "fopen(\"%s\")", filename);
 
-    while ( (buf = read_line(fp)) != NULL )
-    {
+    if (fp == NULL)
+        err(1, "fopen(\"%s\")", filename);
+    while ((buf = read_line(fp)) != NULL) {
         chomp(buf);
         parse_mimetype_line(buf);
         free(buf);
     }
-
     fclose(fp);
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Uses the mime_map to determine a Content-Type: for a requested URI.  This
+/* Uses the mime_map to determine a Content-Type: for a requested URI.  This
  * bsearch()es mime_map, so make sure it's sorted first.
  */
-static int mime_mapping_cmp_str(const void *a, const void *b)
-{
-    return strcmp(
-        (const char *)a,
-        ((const struct mime_mapping *)b)->extension
-    );
+static int mime_mapping_cmp_str(const void *a, const void *b) {
+    return strcmp((const char *)a,
+                 ((const struct mime_mapping *)b)->extension);
 }
 
-static const char *uri_content_type(const char *uri)
-{
+static const char *uri_content_type(const char *uri) {
     size_t period, urilen = strlen(uri);
 
-    period=urilen;
+    period = urilen;
     while ((period > 0) &&
            (uri[period] != '.') &&
-           ((urilen-period-1) <= longest_ext)) {
+           ((urilen - period - 1) <= longest_ext))
         period--;
-    }
 
-    if (uri[period] == '.')
-    {
+    if (uri[period] == '.') {
         struct mime_mapping *result =
-            bsearch((uri+period+1), mime_map, mime_map_size,
-            sizeof(struct mime_mapping), mime_mapping_cmp_str);
+            bsearch((uri + period + 1), mime_map, mime_map_size,
+                    sizeof(struct mime_mapping), mime_mapping_cmp_str);
 
-        if (result != NULL)
-        {
-            assert(strcmp(uri+period+1, result->extension) == 0);
+        if (result != NULL) {
+            assert(strcmp(uri + period + 1, result->extension) == 0);
             return result->mimetype;
         }
     }
@@ -789,25 +770,22 @@ static const char *uri_content_type(const char *uri)
     return default_mimetype;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Initialize the sockin global.  This is the socket that we accept
+/* Initialize the sockin global.  This is the socket that we accept
  * connections from.
  */
-static void init_sockin(void)
-{
+static void init_sockin(void) {
     struct sockaddr_in addrin;
     int sockopt;
 
     /* create incoming socket */
     sockin = socket(PF_INET, SOCK_STREAM, 0);
-    if (sockin == -1) err(1, "socket()");
+    if (sockin == -1)
+        err(1, "socket()");
 
     /* reuse address */
     sockopt = 1;
     if (setsockopt(sockin, SOL_SOCKET, SO_REUSEADDR,
-            &sockopt, sizeof(sockopt)) == -1)
+                   &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
 
 #if 0
@@ -834,7 +812,7 @@ static void init_sockin(void)
     addrin.sin_addr.s_addr = bindaddr;
     memset(&(addrin.sin_zero), 0, 8);
     if (bind(sockin, (struct sockaddr *)&addrin,
-            sizeof(struct sockaddr)) == -1)
+             sizeof(struct sockaddr)) == -1)
         err(1, "bind(port %u)", bindport);
 
     printf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
@@ -844,12 +822,11 @@ static void init_sockin(void)
         err(1, "listen()");
 
     /* enable acceptfilter (this is only available on FreeBSD) */
-    if (want_accf)
-    {
+    if (want_accf) {
 #if defined(__FreeBSD__)
         struct accept_filter_arg filt = {"httpready", ""};
         if (setsockopt(sockin, SOL_SOCKET, SO_ACCEPTFILTER,
-            &filt, sizeof(filt)) == -1)
+                       &filt, sizeof(filt)) == -1)
             fprintf(stderr, "cannot enable acceptfilter: %s\n",
                 strerror(errno));
         else
@@ -860,13 +837,7 @@ static void init_sockin(void)
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Prints a usage statement.
- */
-static void usage(void)
-{
+static void usage(void) {
     printf("\n"
     "usage: darkhttpd /path/to/wwwroot [options]\n\n"
     "options:\n\n");
@@ -921,82 +892,74 @@ static void usage(void)
 #endif
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
+/* Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
  * disinterested in value.
  */
-static int str_to_num(const char *str, int *num)
-{
+static int str_to_num(const char *str, int *num) {
     char *endptr;
-    long l = strtol(str, &endptr, 10);
-    if (*endptr != '\0') return 0;
 
-    if (num != NULL) *num = (int)l;
+    long l = strtol(str, &endptr, 10);
+    if (*endptr != '\0')
+        return 0;
+    if (num != NULL)
+        *num = (int)l;
     return 1;
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Parses commandline options.
- */
-static void parse_commandline(const int argc, char *argv[])
-{
+static void parse_commandline(const int argc, char *argv[]) {
     int i;
+    size_t len;
 
-    if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0))
-    {
+    if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
         usage(); /* no wwwroot given */
         exit(EXIT_FAILURE);
     }
 
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
-    if (wwwroot[strlen(wwwroot)-1] == '/') wwwroot[strlen(wwwroot)-1] = '\0';
+    len = strlen(wwwroot);
+    if (len > 0)
+        if (wwwroot[len - 1] == '/')
+            wwwroot[len - 1] = '\0';
 
     /* walk through the remainder of the arguments (if any) */
-    for (i=2; i<argc; i++)
-    {
-        if (strcmp(argv[i], "--port") == 0)
-        {
-            if (++i >= argc) errx(1, "missing number after --port");
-            bindport = (unsigned short)atoi(argv[i]);
+    for (i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--port") == 0) {
+            if (++i >= argc)
+                errx(1, "missing number after --port");
+            bindport = atoi(argv[i]);
         }
-        else if (strcmp(argv[i], "--addr") == 0)
-        {
-            if (++i >= argc) errx(1, "missing ip after --addr");
+        else if (strcmp(argv[i], "--addr") == 0) {
+            if (++i >= argc)
+                errx(1, "missing ip after --addr");
             bindaddr = inet_addr(argv[i]);
             if (bindaddr == (in_addr_t)INADDR_NONE)
                 errx(1, "malformed --addr argument");
         }
-        else if (strcmp(argv[i], "--maxconn") == 0)
-        {
-            if (++i >= argc) errx(1, "missing number after --maxconn");
+        else if (strcmp(argv[i], "--maxconn") == 0) {
+            if (++i >= argc)
+                errx(1, "missing number after --maxconn");
             max_connections = atoi(argv[i]);
         }
-        else if (strcmp(argv[i], "--log") == 0)
-        {
-            if (++i >= argc) errx(1, "missing filename after --log");
+        else if (strcmp(argv[i], "--log") == 0) {
+            if (++i >= argc)
+                errx(1, "missing filename after --log");
             logfile_name = argv[i];
         }
-        else if (strcmp(argv[i], "--chroot") == 0)
-        {
+        else if (strcmp(argv[i], "--chroot") == 0) {
             want_chroot = 1;
         }
-        else if (strcmp(argv[i], "--daemon") == 0)
-        {
+        else if (strcmp(argv[i], "--daemon") == 0) {
             want_daemon = 1;
         }
-        else if (strcmp(argv[i], "--index") == 0)
-        {
-            if (++i >= argc) errx(1, "missing filename after --index");
+        else if (strcmp(argv[i], "--index") == 0) {
+            if (++i >= argc)
+                errx(1, "missing filename after --index");
             index_name = argv[i];
         }
-        else if (strcmp(argv[i], "--mimetypes") == 0)
-        {
-            if (++i >= argc) errx(1, "missing filename after --mimetypes");
+        else if (strcmp(argv[i], "--mimetypes") == 0) {
+            if (++i >= argc)
+                errx(1, "missing filename after --mimetypes");
             parse_extension_map_file(argv[i]);
         }
         else if (strcmp(argv[i], "--uid") == 0)
