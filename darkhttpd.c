@@ -2070,12 +2070,10 @@ static void poll_send_reply(struct connection *conn)
         conn->state = DONE;
 }
 
-/* ---------------------------------------------------------------------------
- * Main loop of the httpd - a select() and then delegation to accept
+/* Main loop of the httpd - a select() and then delegation to accept
  * connections, handle receiving of requests, and sending of replies.
  */
-static void httpd_poll(void)
-{
+static void httpd_poll(void) {
     fd_set recv_set, send_set;
     int max_fd, select_ret;
     struct connection *conn, *next;
@@ -2095,11 +2093,9 @@ static void httpd_poll(void)
 
     MAX_FD_SET(sockin, &recv_set);
 
-    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
-    {
+    LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
         poll_check_timeout(conn);
-        switch (conn->state)
-        {
+        switch (conn->state) {
         case DONE:
             /* do nothing */
             break;
@@ -2123,8 +2119,7 @@ static void httpd_poll(void)
     /* -select- */
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
         (bother_with_timeout) ? &timeout : NULL);
-    if (select_ret == 0)
-    {
+    if (select_ret == 0) {
         if (!bother_with_timeout)
             errx(1, "select() timed out");
         else
@@ -2141,12 +2136,11 @@ static void httpd_poll(void)
     now = time(NULL);
 
     /* poll connections that select() says need attention */
-    if (FD_ISSET(sockin, &recv_set)) accept_connection();
+    if (FD_ISSET(sockin, &recv_set))
+        accept_connection();
 
-    LIST_FOREACH_SAFE(conn, &connlist, entries, next)
-    {
-        switch (conn->state)
-        {
+    LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
+        switch (conn->state) {
         case RECV_REQUEST:
             if (FD_ISSET(conn->socket, &recv_set)) poll_recv_request(conn);
             break;
@@ -2183,86 +2177,75 @@ static void httpd_poll(void)
     }
 }
 
-
-
-/* ---------------------------------------------------------------------------
- * Daemonize helpers.
- */
+/* Daemonize helpers. */
 #define PATH_DEVNULL "/dev/null"
 static int lifeline[2] = { -1, -1 };
 static int fd_null = -1;
 
-static void
-daemonize_start(void)
-{
-   pid_t f, w;
+static void daemonize_start(void) {
+    pid_t f, w;
 
-   if (pipe(lifeline) == -1)
-      err(1, "pipe(lifeline)");
+    if (pipe(lifeline) == -1)
+        err(1, "pipe(lifeline)");
 
-   fd_null = open(PATH_DEVNULL, O_RDWR, 0);
-   if (fd_null == -1)
-      err(1, "open(" PATH_DEVNULL ")");
+    fd_null = open(PATH_DEVNULL, O_RDWR, 0);
+    if (fd_null == -1)
+        err(1, "open(" PATH_DEVNULL ")");
 
-   f = fork();
-   if (f == -1)
-      err(1, "fork");
-   else if (f != 0) {
-      /* parent: wait for child */
-      char tmp[1];
-      int status;
+    f = fork();
+    if (f == -1)
+        err(1, "fork");
+    else if (f != 0) {
+        /* parent: wait for child */
+        char tmp[1];
+        int status;
 
-      if (close(lifeline[1]) == -1)
-         warn("close lifeline in parent");
-      if (read(lifeline[0], tmp, sizeof(tmp)) == -1)
-         warn("read lifeline in parent");
-      w = waitpid(f, &status, WNOHANG);
-      if (w == -1)
-         err(1, "waitpid");
-      else if (w == 0)
-         /* child is running happily */
-         exit(EXIT_SUCCESS);
-      else
-         /* child init failed, pass on its exit status */
-         exit(WEXITSTATUS(status));
-   }
-   /* else we are the child: continue initializing */
+        if (close(lifeline[1]) == -1)
+            warn("close lifeline in parent");
+        if (read(lifeline[0], tmp, sizeof(tmp)) == -1)
+            warn("read lifeline in parent");
+        w = waitpid(f, &status, WNOHANG);
+        if (w == -1)
+            err(1, "waitpid");
+        else if (w == 0)
+            /* child is running happily */
+            exit(EXIT_SUCCESS);
+        else
+            /* child init failed, pass on its exit status */
+            exit(WEXITSTATUS(status));
+    }
+    /* else we are the child: continue initializing */
 }
 
-static void
-daemonize_finish(void)
-{
-   if (fd_null == -1)
-      return; /* didn't daemonize_start() so we're not daemonizing */
+static void daemonize_finish(void) {
+    if (fd_null == -1)
+        return; /* didn't daemonize_start() so we're not daemonizing */
 
-   if (setsid() == -1)
-      err(1, "setsid");
-   if (close(lifeline[0]) == -1)
-      warn("close read end of lifeline in child");
-   if (close(lifeline[1]) == -1)
-      warn("couldn't cut the lifeline");
+    if (setsid() == -1)
+        err(1, "setsid");
+    if (close(lifeline[0]) == -1)
+        warn("close read end of lifeline in child");
+    if (close(lifeline[1]) == -1)
+        warn("couldn't cut the lifeline");
 
-   /* close all our std fds */
-   if (dup2(fd_null, STDIN_FILENO) == -1)
-      warn("dup2(stdin)");
-   if (dup2(fd_null, STDOUT_FILENO) == -1)
-      warn("dup2(stdout)");
-   if (dup2(fd_null, STDERR_FILENO) == -1)
-      warn("dup2(stderr)");
-   if (fd_null > 2)
-      close(fd_null);
+    /* close all our std fds */
+    if (dup2(fd_null, STDIN_FILENO) == -1)
+        warn("dup2(stdin)");
+    if (dup2(fd_null, STDOUT_FILENO) == -1)
+        warn("dup2(stdout)");
+    if (dup2(fd_null, STDERR_FILENO) == -1)
+        warn("dup2(stderr)");
+    if (fd_null > 2)
+        close(fd_null);
 }
 
-/* ---------------------------------------------------------------------------
- * Pidfile helpers, based on FreeBSD src/lib/libutil/pidfile.c,v 1.3
+/* [<-] pidfile helpers, based on FreeBSD src/lib/libutil/pidfile.c,v 1.3
  * Original was copyright (c) 2005 Pawel Jakub Dawidek <pjd@FreeBSD.org>
  */
 static int pidfile_fd = -1;
 #define PIDFILE_MODE 0600
 
-static void
-pidfile_remove(void)
-{
+static void pidfile_remove(void) {
     if (unlink(pidfile_name) == -1)
         err(1, "unlink(pidfile) failed");
  /* if (flock(pidfile_fd, LOCK_UN) == -1)
@@ -2271,9 +2254,7 @@ pidfile_remove(void)
     pidfile_fd = -1;
 }
 
-static int
-pidfile_read(void)
-{
+static int pidfile_read(void) {
     char buf[16], *endptr;
     int fd, i, pid;
 
@@ -2293,9 +2274,7 @@ pidfile_read(void)
     return (pid);
 }
 
-static void
-pidfile_create(void)
-{
+static void pidfile_create(void) {
     int error, fd;
     char pidstr[16];
 
@@ -2325,24 +2304,16 @@ pidfile_create(void)
         err(1, "pwrite() failed");
     }
 }
+/* [<-] end of pidfile helpers. */
 
-/* end of pidfile helpers.
- * ---------------------------------------------------------------------------
- * Close all sockets and FILEs and exit.
- */
-static void
-stop_running(int sig)
-{
+/* Close all sockets and FILEs and exit. */
+static void stop_running(int sig) {
     running = 0;
     fprintf(stderr, "\ncaught %s, stopping\n", strsignal(sig));
 }
 
-/* ---------------------------------------------------------------------------
- * Execution starts here.
- */
-int
-main(int argc, char **argv)
-{
+/* Execution starts here. */
+int main(int argc, char **argv) {
     printf("%s, %s.\n", pkgname, copyright);
     parse_default_extension_map();
     parse_commandline(argc, argv);
@@ -2354,14 +2325,14 @@ main(int argc, char **argv)
     init_sockin();
 
     /* open logfile */
-    if (logfile_name != NULL)
-    {
+    if (logfile_name != NULL) {
         logfile = fopen(logfile_name, "ab");
         if (logfile == NULL)
             err(1, "opening logfile: fopen(\"%s\")", logfile_name);
     }
 
-    if (want_daemon) daemonize_start();
+    if (want_daemon)
+        daemonize_start();
 
     /* signals */
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
@@ -2374,8 +2345,7 @@ main(int argc, char **argv)
         err(1, "signal(SIGTERM)");
 
     /* security */
-    if (want_chroot)
-    {
+    if (want_chroot) {
         tzset(); /* read /etc/localtime before we chroot */
         if (chdir(wwwroot) == -1)
             err(1, "chdir(%s)", wwwroot);
@@ -2384,14 +2354,14 @@ main(int argc, char **argv)
         printf("chrooted to `%s'\n", wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
-    if (drop_gid != INVALID_GID)
-    {
-        if (setgid(drop_gid) == -1) err(1, "setgid(%d)", drop_gid);
+    if (drop_gid != INVALID_GID) {
+        if (setgid(drop_gid) == -1)
+            err(1, "setgid(%d)", drop_gid);
         printf("set gid to %d\n", drop_gid);
     }
-    if (drop_uid != INVALID_UID)
-    {
-        if (setuid(drop_uid) == -1) err(1, "setuid(%d)", drop_uid);
+    if (drop_uid != INVALID_UID) {
+        if (setuid(drop_uid) == -1)
+            err(1, "setuid(%d)", drop_uid);
         printf("set uid to %d\n", drop_uid);
     }
 
@@ -2412,8 +2382,7 @@ main(int argc, char **argv)
     {
         struct connection *conn, *next;
 
-        LIST_FOREACH_SAFE(conn, &connlist, entries, next)
-        {
+        LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
             LIST_REMOVE(conn, entries);
             free_connection(conn);
             free(conn);
@@ -2423,8 +2392,8 @@ main(int argc, char **argv)
     /* free the mallocs */
     {
         size_t i;
-        for (i=0; i<mime_map_size; i++)
-        {
+
+        for (i=0; i<mime_map_size; i++) {
             free(mime_map[i].extension);
             free(mime_map[i].mimetype);
         }
@@ -2448,7 +2417,7 @@ main(int argc, char **argv)
         printf("Bytes: %llu in, %llu out\n", total_in, total_out);
     }
 
-    return (0);
+    return 0;
 }
 
 /* vim:set tabstop=4 shiftwidth=4 expandtab tw=78: */
