@@ -61,17 +61,29 @@ static const int debug = 1;
 #include <time.h>
 #include <unistd.h>
 
-#ifndef min
-#define min(a,b) ( ((a)<(b)) ? (a) : (b) )
-#endif
-
+#ifdef __sun__
 #ifndef INADDR_NONE
 #define INADDR_NONE -1
+#endif
+#endif
+
+#ifndef min
+#define min(a,b) ( ((a)<(b)) ? (a) : (b) )
 #endif
 
 #if defined(O_EXCL) && !defined(O_EXLOCK)
 #define O_EXLOCK O_EXCL
 #endif
+
+/* [->] borrowed from FreeBSD's src/sys/sys/systm.h,v 1.276.2.7.4.1 */
+#ifndef CTASSERT                /* Allow lint to override */
+#define CTASSERT(x)             _CTASSERT(x, __LINE__)
+#define _CTASSERT(x, y)         __CTASSERT(x, y)
+#define __CTASSERT(x, y)        typedef char __assert ## y[(x) ? 1 : -1]
+#endif
+/* [<-] */
+
+CTASSERT(sizeof(unsigned long long) >= sizeof(off_t));
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
 #include <err.h>
@@ -210,23 +222,17 @@ struct connection
     char *reply;
     int reply_dont_free;
     int reply_fd;
-    off_t reply_start, reply_length, reply_sent;
-
-    unsigned int total_sent; /* header + body = total, for logging */
+    off_t reply_start, reply_length, reply_sent,
+          total_sent; /* header + body = total, for logging */
 };
 
-
-
-struct mime_mapping
-{
+struct mime_mapping {
     char *extension, *mimetype;
 };
 
 struct mime_mapping *mime_map = NULL;
 size_t mime_map_size = 0;
 size_t longest_ext = 0;
-
-
 
 /* If a connection is idle for idletime seconds or more, it gets closed and
  * removed from the connlist.  Set to 0 to remove the timeout
@@ -1669,13 +1675,12 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size)
     }
 }
 
-/* ---------------------------------------------------------------------------
- * Should this character be urlencoded (according to rfc1738)
+/* Should this character be urlencoded (according to RFC1738).
+ * Contirubted by nf.
  */
-static int needs_urlencoding(char c)
-{
+static int needs_urlencoding(char c) {
     int i;
-    const static char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
+    static const char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
 
     for (i=0; i<sizeof(bad)-1; i++)
         if (c == bad[i])
@@ -1688,12 +1693,11 @@ static int needs_urlencoding(char c)
     return 0;
 }
 
-/* ---------------------------------------------------------------------------
- * Encode filename to be an rfc1738-compliant URL part
+/* Encode filename to be an RFC1738-compliant URL part.
+ * Contributed by nf
  */
-static void urlencode_filename(char *name, char *safe_url)
-{
-    const static char hex[] = "0123456789ABCDEF";
+static void urlencode_filename(char *name, char *safe_url) {
+    static const char hex[] = "0123456789ABCDEF";
     int i, j;
 
     for (i = j = 0; name[i] != '\0'; i++)
@@ -2044,8 +2048,7 @@ static void poll_recv_request(struct connection *conn)
     recvd = recv(conn->socket, buf, BUFSIZE, 0);
     if (debug) printf("poll_recv_request(%d) got %d bytes\n",
         conn->socket, (int)recvd);
-    if (recvd <= 0)
-    {
+    if (recvd < 1) {
         if (recvd == -1) {
             if (errno == EAGAIN) {
                 if (debug) printf("poll_recv_request would have blocked\n");
@@ -2062,11 +2065,13 @@ static void poll_recv_request(struct connection *conn)
     #undef BUFSIZE
 
     /* append to conn->request */
-    conn->request = xrealloc(conn->request, conn->request_length+recvd+1);
+    assert(recvd > 0);
+    conn->request = xrealloc(conn->request,
+        conn->request_length + (size_t)recvd + 1);
     memcpy(conn->request+conn->request_length, buf, (size_t)recvd);
-    conn->request_length += recvd;
+    conn->request_length += (size_t)recvd;
     conn->request[conn->request_length] = 0;
-    total_in += recvd;
+    total_in += (size_t)recvd;
 
     /* process request if we have all of it */
     if ((conn->request_length > 2) &&
@@ -2110,8 +2115,7 @@ static void poll_send_header(struct connection *conn)
         conn->socket, (int)sent);
 
     /* handle any errors (-1) or closure (0) in send() */
-    if (sent < 1)
-    {
+    if (sent < 1) {
         if ((sent == -1) && (errno == EAGAIN)) {
             if (debug) printf("poll_send_header would have blocked\n");
             return;
@@ -2122,9 +2126,10 @@ static void poll_send_header(struct connection *conn)
         conn->state = DONE;
         return;
     }
-    conn->header_sent += sent;
-    conn->total_sent += sent;
-    total_out += sent;
+    assert(sent > 0);
+    conn->header_sent += (size_t)sent;
+    conn->total_sent += (size_t)sent;
+    total_out += (size_t)sent;
 
     /* check if we're done sending header */
     if (conn->header_sent == conn->header_length)
@@ -2150,7 +2155,7 @@ static void poll_send_header(struct connection *conn)
  * read error.
  */
 static ssize_t send_from_file(const int s, const int fd,
-    off_t ofs, off_t size)
+    off_t ofs, size_t size)
 {
 #ifdef __FreeBSD__
     off_t sent;
@@ -2219,16 +2224,18 @@ static void poll_send_reply(struct connection *conn)
     assert(!conn->header_only);
     if (conn->reply_type == REPLY_GENERATED)
     {
+        assert(conn->reply_length >= conn->reply_sent);
         sent = send(conn->socket,
             conn->reply + conn->reply_start + conn->reply_sent,
-            conn->reply_length - conn->reply_sent, 0);
+            (size_t)(conn->reply_length - conn->reply_sent), 0);
     }
     else
     {
         errno = 0;
+        assert(conn->reply_length >= conn->reply_sent);
         sent = send_from_file(conn->socket, conn->reply_fd,
             conn->reply_start + conn->reply_sent,
-            conn->reply_length - conn->reply_sent);
+            (size_t)(conn->reply_length - conn->reply_sent));
         if (debug && (sent < 1))
             printf("send_from_file returned %lld (errno=%d %s)\n",
                 (long long)sent, errno, strerror(errno));
@@ -2289,10 +2296,10 @@ static void log_connection(const struct connection *conn)
 
     inaddr.s_addr = conn->client;
 
-    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%u\t\"%s\"\t\"%s\"\n",
+    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
         (unsigned long int)now, inet_ntoa(inaddr),
         conn->method, conn->uri,
-        conn->http_code, conn->total_sent,
+        conn->http_code, (unsigned long long)conn->total_sent,
         (conn->referer == NULL)?"":conn->referer,
         (conn->user_agent == NULL)?"":conn->user_agent
         );
@@ -2445,7 +2452,8 @@ daemonize_start(void)
 
       if (close(lifeline[1]) == -1)
          warn("close lifeline in parent");
-      read(lifeline[0], tmp, sizeof(tmp));
+      if (read(lifeline[0], tmp, sizeof(tmp)) == -1)
+         warn("read lifeline in parent");
       w = waitpid(f, &status, WNOHANG);
       if (w == -1)
          err(1, "waitpid");
@@ -2674,7 +2682,7 @@ main(int argc, char **argv)
             (unsigned int)r.ru_stime.tv_sec,
                 (unsigned int)(r.ru_stime.tv_usec/10000)
         );
-        printf("Requests: %u\n", num_requests);
+        printf("Requests: %llu\n", num_requests);
         printf("Bytes: %llu in, %llu out\n", total_in, total_out);
     }
 
