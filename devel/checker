@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Run through the clang static analyzer
+#
+
+# Adjust to suit:
+LLVM=$HOME/llvm
+CHECKER=$LLVM/llvm/tools/clang/tools/scan-build/ccc-analyzer
+
+env PATH=$LLVM/build/Release/bin:$PATH $CHECKER ../darkhttpd.c
+
+rm -f a.out
