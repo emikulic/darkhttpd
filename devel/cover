@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# Coverage and unit tests!
+#
+DIR=tmp.httpd.tests
+PORT=12346
+
+if [ ! -e test.py ]; then
+	echo "can't find test.py, aborting" >&2
+	exit 1
+fi
+if [ ! -x a.out ]; then
+	gcc -g -fprofile-arcs -ftest-coverage ../darkhttpd.c || exit 1
+	# generates a.out, darkhttpd.gcno
+fi
+if [ -e $DIR ]; then
+	rm -rf $DIR || exit 1
+fi
+mkdir $DIR || exit 1
+rm -f darkhttpd.gcda
+./a.out $DIR --port $PORT &
+# generates darkhttpd.gcda
+PID=$!
+kill -0 $PID || exit 1
+python test.py
+kill $PID
+gcov darkhttpd
+# generates darkhttpd.c.gcov
+echo "done!"
