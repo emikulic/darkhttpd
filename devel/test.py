@@ -56,6 +56,18 @@ class TestCases(unittest.TestCase):
         body = Conn().get("GET /dir/../ HTTP/1.0\n\n")
         self.assertIsIndex(body, "/dir/../")
 
+    def testExtraneousSlashes(self):
+        body = Conn().get("GET //dir///..//// HTTP/1.0\n\n")
+        self.assertIsIndex(body, "//dir///..////")
+
+    def testWithoutTrailingSlash(self):
+        body = Conn().get("GET /dir/.. HTTP/1.0\n\n")
+        self.assertIsIndex(body, "/dir/..")
+
+    def testWithoutLeadingSlashFails(self):
+        body = Conn().get("GET dir/../ HTTP/1.0\n\n")
+        self.assertIsInvalid(body, "dir/../")
+
     def testUpDirInvalid(self):
         body = Conn().get("GET /../ HTTP/1.0\n\n")
         self.assertIsInvalid(body, "/../")
