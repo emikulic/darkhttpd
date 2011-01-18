@@ -102,6 +102,7 @@ def makeCase(name, url, hdr_checker=None, body_checker=None,
         nerf("HTTP"+v),
         {"\n":"LF", "\r\n":"CRLF"}[endl],
     ])
+    do_test.__name__ = test_name # hax
     setattr(TestCases, test_name, do_test)
 
 def makeCases(name, url, hdr_checker=None, body_checker=None,
@@ -117,19 +118,20 @@ def makeSimpleCases(name, url, assert_name):
     makeCases(name, url, None,
         lambda self,body: getattr(self, assert_name)(body, url))
 
-for args in [
-    ["index",                "/",               "assertIsIndex"],
-    ["up dir",               "/dir/../",        "assertIsIndex"],
-    ["extra slashes",        "//dir///..////",  "assertIsIndex"],
-    ["no trailing slash",    "/dir/..",         "assertIsIndex"],
-    ["no leading slash",     "dir/../",         "assertIsInvalid"],
-    ["invalid up dir",       "/../",            "assertIsInvalid"],
-    ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
-    ]:
-    makeSimpleCases(*args)
-
+def setUpModule():
+    for args in [
+        ["index",                "/",               "assertIsIndex"],
+        ["up dir",               "/dir/../",        "assertIsIndex"],
+        ["extra slashes",        "//dir///..////",  "assertIsIndex"],
+        ["no trailing slash",    "/dir/..",         "assertIsIndex"],
+        ["no leading slash",     "dir/../",         "assertIsInvalid"],
+        ["invalid up dir",       "/../",            "assertIsInvalid"],
+        ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
+        ]:
+        makeSimpleCases(*args)
 
 if __name__ == '__main__':
+    setUpModule()
     unittest.main()
     #x = Conn().get("/xyz/../", "1.0")
     #y = parse(x)
