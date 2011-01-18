@@ -113,26 +113,21 @@ def makeCases(name, url, hdr_checker=None, body_checker=None,
             makeCase(name, url, hdr_checker, body_checker,
                      req_hdrs, http_ver, endl)
 
-makeCases("index", "/", None,
-    lambda self,body: self.assertIsIndex(body, "/"))
+def makeSimpleCases(name, url, assert_name):
+    makeCases(name, url, None,
+        lambda self,body: getattr(self, assert_name)(body, url))
 
-makeCases("up dir", "/dir/../", None,
-    lambda self,body: self.assertIsIndex(body, "/dir/../"))
+for args in [
+    ["index",                "/",               "assertIsIndex"],
+    ["up dir",               "/dir/../",        "assertIsIndex"],
+    ["extra slashes",        "//dir///..////",  "assertIsIndex"],
+    ["no trailing slash",    "/dir/..",         "assertIsIndex"],
+    ["no leading slash",     "dir/../",         "assertIsInvalid"],
+    ["invalid up dir",       "/../",            "assertIsInvalid"],
+    ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
+    ]:
+    makeSimpleCases(*args)
 
-makeCases("extra slashes", "//dir///..////", None,
-    lambda self,body: self.assertIsIndex(body, "//dir///..////"))
-
-makeCases("no trailing slash", "/dir/..", None,
-    lambda self,body: self.assertIsIndex(body, "/dir/.."))
-
-makeCases("no leading slash", "dir/../", None,
-    lambda self,body: self.assertIsInvalid(body, "dir/../"))
-
-makeCases("invalid up dir", "/../", None,
-    lambda self,body: self.assertIsInvalid(body, "/../"))
-
-makeCases("fancy invalid up dir", "/./dir/./../../", None,
-    lambda self,body: self.assertIsInvalid(body, "/./dir/./../../"))
 
 if __name__ == '__main__':
     unittest.main()
