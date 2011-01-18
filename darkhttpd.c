@@ -1409,7 +1409,8 @@ static int parse_request(struct connection *conn) {
     for (bound2 = bound1 + 1;
         (bound2 < conn->request_length) &&
         (conn->request[bound2] != ' ') &&
-        (conn->request[bound2] != '\r');
+        (conn->request[bound2] != '\r') &&
+        (conn->request[bound2] != '\n');
         bound2++)
             ;
 
