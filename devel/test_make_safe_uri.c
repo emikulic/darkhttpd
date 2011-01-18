@@ -1,5 +1,5 @@
 #define main _main_disabled_
-#include "trunk/darkhttpd.c"
+#include "../darkhttpd.c"
 #undef main
 
 static void
