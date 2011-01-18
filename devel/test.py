@@ -108,8 +108,8 @@ def makeCase(name, url, hdr_checker=None, body_checker=None,
 def makeCases(name, url, hdr_checker=None, body_checker=None,
               req_hdrs={"User-Agent": "test.py"}):
     # FIXME: 0.9 is broken
-    #for http_ver in [None, "1.0", "1.1"]:
-    for http_ver in ["1.0", "1.1"]:
+    for http_ver in [None, "1.0", "1.1"]:
+    #for http_ver in ["1.0", "1.1"]:
         for endl in ["\n", "\r\n"]:
             makeCase(name, url, hdr_checker, body_checker,
                      req_hdrs, http_ver, endl)

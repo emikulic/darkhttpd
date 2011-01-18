@@ -1689,7 +1689,7 @@ static void process_get(struct connection *conn) {
     }
     free(decoded_url);
     if (debug)
-        printf("uri=%s, target=%s, content-type=%s\n",
+        printf("uri=\"%s\", target=\"%s\", content-type=\"%s\"\n",
                conn->uri, target, mimetype);
 
     /* open file */
