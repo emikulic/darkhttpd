@@ -14,14 +14,16 @@ class Conn:
         self.s.connect(("0.0.0.0", self.port))
         # connect throws socket.error on connection refused
 
-    def get(self, url, http_ver="1.0", endl="\n",
-            req_hdrs={"User-Agent": "test.py"}):
+    def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}):
         req = "GET "+url
         if http_ver is not None:
             req += " HTTP/"+http_ver
-        req += "\n"
-        for k,v in req_hdrs.items():
-            req += k+": "+v+endl
+        req += endl
+        if http_ver is not None:
+            req_hdrs["User-Agent"] = "test.py"
+            req_hdrs["Connection"] = "close"
+            for k,v in req_hdrs.items():
+                req += k+": "+v+endl
         req += endl # end of request
         self.s.send(req)
         ret = ""
