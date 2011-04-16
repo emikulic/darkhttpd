@@ -858,7 +858,7 @@ static void usage(void) {
     "\t\tSpecifies how many concurrent connections to accept.\n"
     "\n");
     printf(
-    "\t--log filename (default: no logging)\n"
+    "\t--log filename (default: stdout)\n"
     "\t\tSpecifies which file to append the request log to.\n"
     "\n");
     printf(
@@ -2335,7 +2335,9 @@ int main(int argc, char **argv) {
     init_sockin();
 
     /* open logfile */
-    if (logfile_name != NULL) {
+    if (logfile_name == NULL)
+        logfile = stdout;
+    else {
         logfile = fopen(logfile_name, "ab");
         if (logfile == NULL)
             err(1, "opening logfile: fopen(\"%s\")", logfile_name);
