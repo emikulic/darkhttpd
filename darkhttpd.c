@@ -256,7 +256,7 @@ static time_t now;
 
 /* Defaults can be overridden on the command-line */
 static in_addr_t bindaddr = INADDR_ANY;
-static uint16_t bindport = 80;
+static uint16_t bindport = 8080; /* or 80 if running as root */
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 
@@ -844,7 +844,7 @@ static void usage(void) {
     "usage: darkhttpd /path/to/wwwroot [options]\n\n"
     "options:\n\n");
     printf(
-    "\t--port number (default: %u)\n" /* bindport */
+    "\t--port number (default: %u, or 80 if running as root)\n" /* bindport */
     "\t\tSpecifies which port to listen on for connections.\n"
     "\n", bindport);
     printf(
@@ -916,6 +916,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         usage(); /* no wwwroot given */
         exit(EXIT_FAILURE);
     }
+
+    if (getuid() == 0)
+        bindport = 80;
 
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
