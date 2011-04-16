@@ -17,8 +17,8 @@ if [ -e $DIR ]; then
 	rm -rf $DIR || exit 1
 fi
 mkdir $DIR || exit 1
-rm -f darkhttpd.gcda
-./a.out $DIR --port $PORT &
+rm -f darkhttpd.gcda darkhttpd.log
+./a.out $DIR --port $PORT --log darkhttpd.log &
 # generates darkhttpd.gcda
 PID=$!
 kill -0 $PID || exit 1
