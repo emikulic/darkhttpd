@@ -817,7 +817,8 @@ static void init_sockin(void) {
              sizeof(struct sockaddr)) == -1)
         err(1, "bind(port %u)", bindport);
 
-    printf("listening on %s:%u\n", inet_ntoa(addrin.sin_addr), bindport);
+    printf("listening on: http://%s:%u/\n",
+        inet_ntoa(addrin.sin_addr), bindport);
 
     /* listen on socket */
     if (listen(sockin, max_connections) == -1)
