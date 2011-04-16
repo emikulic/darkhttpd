@@ -6,7 +6,7 @@ static void
 test(const char *input, const char *expected)
 {
     char *tmp = xstrdup(input);
-    char *out = make_safe_uri(tmp);
+    char *out = make_safe_url(tmp);
 
     if (expected == NULL) {
         if (out == NULL)

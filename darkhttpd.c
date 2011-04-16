@@ -213,7 +213,7 @@ struct connection {
     size_t request_length;
 
     /* request fields */
-    char *method, *uri, *referer, *user_agent;
+    char *method, *url, *referer, *user_agent;
     off_t range_begin, range_end;
     off_t range_begin_given, range_end_given;
 
@@ -478,47 +478,47 @@ static void consolidate_slashes(char *s) {
     s[left] = '\0';
 }
 
-/* Resolve /./ and /../ in a URI, in-place.  Returns NULL if the URI is
+/* Resolve /./ and /../ in a URL, in-place.  Returns NULL if the URL is
  * invalid/unsafe, or the original buffer if successful.
  */
-static char *make_safe_uri(char *uri) {
+static char *make_safe_url(char *url) {
     struct {
         char *start;
         size_t len;
     } *chunks;
     unsigned int num_slashes, num_chunks;
-    size_t urilen, i, j, pos;
+    size_t urllen, i, j, pos;
     int ends_in_slash;
 
-    assert(uri != NULL);
-    if (uri[0] != '/')
+    assert(url != NULL);
+    if (url[0] != '/')
         return NULL;
-    consolidate_slashes(uri);
-    urilen = strlen(uri);
-    if (urilen > 0)
-        ends_in_slash = (uri[urilen-1] == '/');
+    consolidate_slashes(url);
+    urllen = strlen(url);
+    if (urllen > 0)
+        ends_in_slash = (url[urllen-1] == '/');
     else
         ends_in_slash = 1;
 
     /* count the slashes */
-    for (i=0, num_slashes=0; i<urilen; i++)
-        if (uri[i] == '/')
+    for (i=0, num_slashes=0; i<urllen; i++)
+        if (url[i] == '/')
             num_slashes++;
 
-    /* make an array for the URI elements */
+    /* make an array for the URL elements */
     chunks = xmalloc(sizeof(*chunks) * num_slashes);
 
     /* split by slashes and build chunks array */
     num_chunks = 0;
-    for (i=1; i<urilen;) {
+    for (i=1; i<urllen;) {
         /* look for the next slash */
-        for (j=i; j<urilen && uri[j] != '/'; j++)
+        for (j=i; j<urllen && url[j] != '/'; j++)
             ;
 
-        /* process uri[i,j) */
-        if ((j == i+1) && (uri[i] == '.'))
+        /* process url[i,j) */
+        if ((j == i+1) && (url[i] == '.'))
             /* "." */;
-        else if ((j == i+2) && (uri[i] == '.') && (uri[i+1] == '.')) {
+        else if ((j == i+2) && (url[i] == '.') && (url[i+1] == '.')) {
             /* ".." */
             if (num_chunks == 0) {
                 /* unsafe string so free chunks */
@@ -527,34 +527,34 @@ static char *make_safe_uri(char *uri) {
             } else
                 num_chunks--;
         } else {
-            chunks[num_chunks].start = uri+i;
+            chunks[num_chunks].start = url+i;
             chunks[num_chunks].len = j-i;
             num_chunks++;
         }
 
-        i = j + 1; /* uri[j] is a slash - move along one */
+        i = j + 1; /* url[j] is a slash - move along one */
     }
 
     /* reassemble in-place */
     pos = 0;
     for (i=0; i<num_chunks; i++) {
-        assert(pos <= urilen);
-        uri[pos++] = '/';
+        assert(pos <= urllen);
+        url[pos++] = '/';
 
-        assert(pos + chunks[i].len <= urilen);
-        assert(uri + pos <= chunks[i].start);
+        assert(pos + chunks[i].len <= urllen);
+        assert(url + pos <= chunks[i].start);
 
-        if (uri+pos < chunks[i].start)
-            memmove(uri+pos, chunks[i].start, chunks[i].len);
+        if (url+pos < chunks[i].start)
+            memmove(url+pos, chunks[i].start, chunks[i].len);
         pos += chunks[i].len;
     }
     free(chunks);
 
     if ((num_chunks == 0) || ends_in_slash)
-        uri[pos++] = '/';
-    assert(pos <= urilen);
-    uri[pos] = '\0';
-    return uri;
+        url[pos++] = '/';
+    assert(pos <= urllen);
+    url[pos] = '\0';
+    return url;
 }
 
 /* Associates an extension with a mimetype in the mime_map.  Entries are in
@@ -742,7 +742,7 @@ static void parse_extension_map_file(const char *filename) {
     fclose(fp);
 }
 
-/* Uses the mime_map to determine a Content-Type: for a requested URI.  This
+/* Uses the mime_map to determine a Content-Type: for a requested URL.  This
  * bsearch()es mime_map, so make sure it's sorted first.
  */
 static int mime_mapping_cmp_str(const void *a, const void *b) {
@@ -750,21 +750,21 @@ static int mime_mapping_cmp_str(const void *a, const void *b) {
                  ((const struct mime_mapping *)b)->extension);
 }
 
-static const char *uri_content_type(const char *uri) {
-    int period, urilen = (int)strlen(uri);
+static const char *url_content_type(const char *url) {
+    int period, urllen = (int)strlen(url);
 
-    for (period = urilen - 1;
-         (period > 0) && (uri[period] != '.') &&
-         (urilen - period - 1 <= (int)longest_ext);
+    for (period = urllen - 1;
+         (period > 0) && (url[period] != '.') &&
+         (urllen - period - 1 <= (int)longest_ext);
          period--)
             ;
 
-    if ((period >= 0) && (uri[period] == '.')) {
+    if ((period >= 0) && (url[period] == '.')) {
         struct mime_mapping *result =
-            bsearch((uri + period + 1), mime_map, mime_map_size,
+            bsearch((url + period + 1), mime_map, mime_map_size,
                     sizeof(struct mime_mapping), mime_mapping_cmp_str);
         if (result != NULL) {
-            assert(strcmp(uri + period + 1, result->extension) == 0);
+            assert(strcmp(url + period + 1, result->extension) == 0);
             return result->mimetype;
         }
     }
@@ -1012,7 +1012,7 @@ static struct connection *new_connection(void) {
     conn->request = NULL;
     conn->request_length = 0;
     conn->method = NULL;
-    conn->uri = NULL;
+    conn->url = NULL;
     conn->referer = NULL;
     conn->user_agent = NULL;
     conn->range_begin = 0;
@@ -1085,14 +1085,14 @@ static void log_connection(const struct connection *conn) {
         return; /* invalid - didn't parse - maybe too long */
 
     /* Separated by tabs:
-     * time client_ip method uri http_code bytes_sent "referer" "user-agent"
+     * time client_ip method url http_code bytes_sent "referer" "user-agent"
      */
 
     inaddr.s_addr = conn->client;
 
     fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
         (unsigned long int)now, inet_ntoa(inaddr),
-        conn->method, conn->uri,
+        conn->method, conn->url,
         conn->http_code, llu(conn->total_sent),
         (conn->referer == NULL)?"":conn->referer,
         (conn->user_agent == NULL)?"":conn->user_agent
@@ -1107,7 +1107,7 @@ static void free_connection(struct connection *conn) {
     if (conn->socket != -1) xclose(conn->socket);
     if (conn->request != NULL) free(conn->request);
     if (conn->method != NULL) free(conn->method);
-    if (conn->uri != NULL) free(conn->uri);
+    if (conn->url != NULL) free(conn->url);
     if (conn->referer != NULL) free(conn->referer);
     if (conn->user_agent != NULL) free(conn->user_agent);
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
@@ -1128,7 +1128,7 @@ static void recycle_connection(struct connection *conn) {
     conn->request = NULL;
     conn->request_length = 0;
     conn->method = NULL;
-    conn->uri = NULL;
+    conn->url = NULL;
     conn->referer = NULL;
     conn->user_agent = NULL;
     conn->range_begin = 0;
@@ -1396,7 +1396,7 @@ static int parse_request(struct connection *conn) {
     conn->method = split_string(conn->request, 0, bound1);
     strntoupper(conn->method, bound1);
 
-    /* parse uri */
+    /* parse url */
     for (;
         (bound1 < conn->request_length) &&
         (conn->request[bound1] == ' ');
@@ -1414,7 +1414,7 @@ static int parse_request(struct connection *conn) {
         bound2++)
             ;
 
-    conn->uri = split_string(conn->request, bound1, bound2);
+    conn->url = split_string(conn->request, bound1, bound2);
 
     /* parse protocol to determine conn_close */
     if (conn->request[bound2] == ' ') {
@@ -1590,9 +1590,9 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     }
 
     append(listing, "<html>\n<head>\n <title>");
-    append(listing, conn->uri);
+    append(listing, conn->url);
     append(listing, "</title>\n</head>\n<body>\n<h1>");
-    append(listing, conn->uri);
+    append(listing, conn->url);
     append(listing, "</h1>\n<tt><pre>\n");
 
     spaces = xmalloc(maxlen);
@@ -1660,12 +1660,12 @@ static void process_get(struct connection *conn) {
     struct stat filestat;
 
     /* work out path of file being requested */
-    decoded_url = urldecode(conn->uri);
+    decoded_url = urldecode(conn->url);
 
     /* make sure it's safe */
-    if (make_safe_uri(decoded_url) == NULL) {
+    if (make_safe_url(decoded_url) == NULL) {
         default_reply(conn, 400, "Bad Request",
-                      "You requested an invalid URI: %s", conn->uri);
+                      "You requested an invalid URL: %s", conn->url);
         free(decoded_url);
         return;
     }
@@ -1681,17 +1681,17 @@ static void process_get(struct connection *conn) {
             free(decoded_url);
             return;
         }
-        mimetype = uri_content_type(index_name);
+        mimetype = url_content_type(index_name);
     }
     else {
         /* points to a file */
         xasprintf(&target, "%s%s", wwwroot, decoded_url);
-        mimetype = uri_content_type(decoded_url);
+        mimetype = url_content_type(decoded_url);
     }
     free(decoded_url);
     if (debug)
-        printf("uri=\"%s\", target=\"%s\", content-type=\"%s\"\n",
-               conn->uri, target, mimetype);
+        printf("url=\"%s\", target=\"%s\", content-type=\"%s\"\n",
+               conn->url, target, mimetype);
 
     /* open file */
     conn->reply_fd = open(target, O_RDONLY | O_NONBLOCK);
@@ -1701,14 +1701,14 @@ static void process_get(struct connection *conn) {
         /* open() failed */
         if (errno == EACCES)
             default_reply(conn, 403, "Forbidden",
-                "You don't have permission to access (%s).", conn->uri);
+                "You don't have permission to access (%s).", conn->url);
         else if (errno == ENOENT)
             default_reply(conn, 404, "Not Found",
-                "The URI you requested (%s) was not found.", conn->uri);
+                "The URL you requested (%s) was not found.", conn->url);
         else
             default_reply(conn, 500, "Internal Server Error",
-                "The URI you requested (%s) cannot be returned: %s.",
-                conn->uri, strerror(errno));
+                "The URL you requested (%s) cannot be returned: %s.",
+                conn->url, strerror(errno));
 
         return;
     }
@@ -1722,7 +1722,7 @@ static void process_get(struct connection *conn) {
 
     /* make sure it's a regular file */
     if (S_ISDIR(filestat.st_mode)) {
-        redirect(conn, "%s/", conn->uri);
+        redirect(conn, "%s/", conn->url);
         return;
     }
     else if (!S_ISREG(filestat.st_mode)) {
