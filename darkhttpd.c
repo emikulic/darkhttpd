@@ -2371,7 +2371,7 @@ static void pidfile_create(void) {
 /* Close all sockets and FILEs and exit. */
 static void stop_running(int sig) {
     running = 0;
-    fprintf(stderr, "\ncaught %s, stopping\n", strsignal(sig));
+    fprintf(stderr, "\ncaught signal %s, stopping\n", strsignal(sig));
 }
 
 /* Execution starts here. */
