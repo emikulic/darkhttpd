@@ -1077,9 +1077,34 @@ static void accept_connection(void) {
     poll_recv_request(conn);
 }
 
+/* Should this character be logencoded?
+ */
+static int needs_logencoding(const unsigned char c) {
+    return ((c <= 0x1F) || (c >= 0x7F) || (c == '"'));
+}
+
+/* Encode string for logging.
+ */
+static void logencode(const char *src, char *dest) {
+    static const char hex[] = "0123456789ABCDEF";
+    int i, j;
+
+    for (i = j = 0; src[i] != '\0'; i++) {
+        if (needs_logencoding((unsigned char)src[i])) {
+            dest[j++] = '%';
+            dest[j++] = hex[(src[i] >> 4) & 0xF];
+            dest[j++] = hex[ src[i]       & 0xF];
+        }
+        else
+            dest[j++] = src[i];
+    }
+    dest[j] = '\0';
+}
+
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
     struct in_addr inaddr;
+    char *safe_method, *safe_url, *safe_referer, *safe_user_agent;
 
     if (logfile == NULL)
         return;
@@ -1088,20 +1113,45 @@ static void log_connection(const struct connection *conn) {
     if (conn->method == NULL)
         return; /* invalid - didn't parse - maybe too long */
 
-    /* Separated by tabs:
-     * time client_ip method url http_code bytes_sent "referer" "user-agent"
-     */
-
     inaddr.s_addr = conn->client;
 
-    fprintf(logfile, "%lu\t%s\t%s\t%s\t%d\t%llu\t\"%s\"\t\"%s\"\n",
-        (unsigned long int)now, inet_ntoa(inaddr),
-        conn->method, conn->url,
-        conn->http_code, llu(conn->total_sent),
-        (conn->referer == NULL)?"":conn->referer,
-        (conn->user_agent == NULL)?"":conn->user_agent
+#define make_safe(x) \
+    if (conn->x) { \
+        safe_##x = xmalloc(strlen(conn->x)*3 + 1); \
+        logencode(conn->x, safe_##x); \
+    } else { \
+        safe_##x = NULL; \
+    }
+
+    make_safe(method);
+    make_safe(url);
+    make_safe(referer);
+    make_safe(user_agent);
+
+#define use_safe(x) safe_##x ? safe_##x : ""
+
+    fprintf(logfile, "%lu %s \"%s %s\" %d %llu \"%s\" \"%s\"\n",
+        (unsigned long int)now,
+        inet_ntoa(inaddr),
+        use_safe(method),
+        use_safe(url),
+        conn->http_code,
+        llu(conn->total_sent),
+        use_safe(referer),
+        use_safe(user_agent)
         );
     fflush(logfile);
+
+#define free_safe(x) if (safe_##x) free(safe_##x);
+
+    free_safe(method);
+    free_safe(url);
+    free_safe(referer);
+    free_safe(user_agent);
+
+#undef make_safe
+#undef use_safe
+#undef free_safe
 }
 
 /* Log a connection, then cleanly deallocate its internals. */
@@ -1535,41 +1585,41 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size) {
     }
 }
 
-/* Should this character be urlencoded (according to RFC1738).
+/* Should this character be urlencoded? (according to RFC1738)
  * Contributed by nf.
  */
-static int needs_urlencoding(unsigned char c) {
+static int needs_urlencoding(const unsigned char c) {
     unsigned int i;
     static const char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
+
+    /* Non-US-ASCII characters */
+    if ((c <= 0x1F) || (c >= 0x7F))
+        return 1;
 
     for (i = 0; i < sizeof(bad) - 1; i++)
         if (c == bad[i])
             return 1;
 
-    /* Non-US-ASCII characters */
-    if ((c <= 0x1F) || (c >= 0x80) || (c == 0x7F))
-        return 1;
-
     return 0;
 }
 
-/* Encode filename to be an RFC1738-compliant URL part.
+/* Encode string to be an RFC1738-compliant URL part.
  * Contributed by nf.
  */
-static void urlencode_filename(char *name, char *safe_url) {
+static void urlencode(const char *src, char *dest) {
     static const char hex[] = "0123456789ABCDEF";
     int i, j;
 
-    for (i = j = 0; name[i] != '\0'; i++) {
-        if (needs_urlencoding((unsigned char)name[i])) {
-            safe_url[j++] = '%';
-            safe_url[j++] = hex[(name[i] >> 4) & 0xF];
-            safe_url[j++] = hex[ name[i]       & 0xF];
+    for (i = j = 0; src[i] != '\0'; i++) {
+        if (needs_urlencoding((unsigned char)src[i])) {
+            dest[j++] = '%';
+            dest[j++] = hex[(src[i] >> 4) & 0xF];
+            dest[j++] = hex[ src[i]       & 0xF];
         }
         else
-            safe_url[j++] = name[i];
+            dest[j++] = src[i];
     }
-    safe_url[j] = '\0';
+    dest[j] = '\0';
 }
 
 static void generate_dir_listing(struct connection *conn, const char *path) {
@@ -1608,7 +1658,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
          */
         char safe_url[MAXNAMLEN*3 + 1];
 
-        urlencode_filename(list[i]->name, safe_url);
+        urlencode(list[i]->name, safe_url);
 
         append(listing, "<a href=\"");
         append(listing, safe_url);
