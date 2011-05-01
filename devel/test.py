@@ -178,6 +178,19 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
 
+    def test_if_modified_since(self):
+        resp1 = Conn().get(self.url, method="HEAD")
+        status, hdrs, body = parse(resp1)
+        lastmod = hdrs["Last-Modified"]
+
+        resp2 = Conn().get(self.url, method="GET", req_hdrs =
+            {"If-Modified-Since": lastmod })
+        status, hdrs, body = parse(resp2)
+        self.assertContains(status, "304 Not Modified")
+        self.assertFalse(hdrs.has_key("Last-Modified"))
+        self.assertFalse(hdrs.has_key("Content-Length"))
+        self.assertFalse(hdrs.has_key("Content-Type"))
+
 if __name__ == '__main__':
     setUpModule()
     unittest.main()
