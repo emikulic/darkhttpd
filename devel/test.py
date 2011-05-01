@@ -223,6 +223,21 @@ class TestFileGet(TestHelper):
         self.drive_range("5-5", "5-5/%d" % self.datalen,
             1, self.data[5])
 
+    def test_range_single_first(self):
+        self.drive_range("0-0", "0-0/%d" % self.datalen,
+            1, self.data[0])
+
+    def test_range_single_last(self):
+        self.drive_range("%d-%d"%(self.datalen-1, self.datalen-1),
+        "%d-%d/%d"%(self.datalen-1, self.datalen-1, self.datalen),
+        1, self.data[-1])
+
+    def test_range_single_bad(self):
+        resp = Conn().get(self.url, req_hdrs = {"Range":
+            "bytes=%d-%d"%(self.datalen, self.datalen)})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "416 Requested Range Not Satisfiable")
+
     def test_range_reasonable(self):
         self.drive_range("10-20", "10-20/%d" % self.datalen,
             20-10+1, self.data[10:20+1])
