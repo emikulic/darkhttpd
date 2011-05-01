@@ -167,6 +167,7 @@ class TestFileGet(TestHelper):
         resp = Conn().get(self.url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
+        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
         self.assertEquals(body, self.data)
@@ -175,6 +176,7 @@ class TestFileGet(TestHelper):
         resp = Conn().get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
+        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
 
@@ -187,9 +189,39 @@ class TestFileGet(TestHelper):
             {"If-Modified-Since": lastmod })
         status, hdrs, body = parse(resp2)
         self.assertContains(status, "304 Not Modified")
+        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
         self.assertFalse(hdrs.has_key("Last-Modified"))
         self.assertFalse(hdrs.has_key("Content-Length"))
         self.assertFalse(hdrs.has_key("Content-Type"))
+
+    def drive_range(self, range_in, range_out, len_out, data_out,
+            status_out = "206 Partial Content"):
+        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes="+range_in})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, status_out)
+        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
+        self.assertEquals(hdrs["Content-Range"], "bytes "+range_out)
+        self.assertEquals(hdrs["Content-Length"], str(len_out))
+        self.assertEquals(body, data_out)
+
+    def test_range_reasonable(self):
+        self.drive_range("10-20", "10-20/%d" % self.datalen,
+            20-10+1, self.data[10:20+1])
+
+    def test_range_tail(self):
+        self.drive_range("10-", "10-%d/%d" % (self.datalen-1, self.datalen),
+            self.datalen-10, self.data[10:])
+
+    def test_range_negative(self):
+        self.drive_range("-25", "%d-%d/%d" % (
+            self.datalen-25, self.datalen-1, self.datalen),
+            25, self.data[-25:])
+
+    def test_range_bad(self):
+        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=%d-"%(
+            self.datalen*2)})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "416 Requested Range Not Satisfiable")
 
 if __name__ == '__main__':
     setUpModule()
