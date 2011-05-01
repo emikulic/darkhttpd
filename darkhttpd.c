@@ -1230,15 +1230,15 @@ static char *urldecode(const char *url) {
         if ((url[i] == '%') && (i+2 < len) &&
             isxdigit(url[i+1]) && isxdigit(url[i+2])) {
             /* decode %XX */
-            #define HEX_TO_DIGIT(hex) ( \
-                ((hex) >= 'A' && (hex) <= 'F') ? ((hex)-'A'+10): \
-                ((hex) >= 'a' && (hex) <= 'f') ? ((hex)-'a'+10): \
-                ((hex)-'0') )
+#define HEX_TO_DIGIT(hex) ( \
+    ((hex) >= 'A' && (hex) <= 'F') ? ((hex)-'A'+10): \
+    ((hex) >= 'a' && (hex) <= 'f') ? ((hex)-'a'+10): \
+    ((hex)-'0') )
 
             out[pos++] = HEX_TO_DIGIT(url[i+1]) * 16 +
                          HEX_TO_DIGIT(url[i+2]);
             i += 2;
-            #undef HEX_TO_DIGIT
+#undef HEX_TO_DIGIT
         } else {
             /* straight copy */
             out[pos++] = url[i];
@@ -1510,7 +1510,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     DIR *dir;
     struct dirent *ent;
     size_t entries = 0, pool = 0;
-    #define POOL_INCR 100
+#define POOL_INCR 100
     char *currname;
     struct dlent **list = NULL;
 
@@ -1547,7 +1547,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
     *output = xrealloc(list, sizeof(struct dlent*) * entries);
     return (ssize_t)entries;
-    #undef POOL_INCR
+#undef POOL_INCR
 }
 
 /* Cleanly deallocate a sorted list of directory files. */
@@ -1912,12 +1912,11 @@ static void process_request(struct connection *conn) {
 
 /* Receiving request. */
 static void poll_recv_request(struct connection *conn) {
-    #define BUFSIZE 65536
-    char buf[BUFSIZE];
+    char buf[1<<15];
     ssize_t recvd;
 
     assert(conn->state == RECV_REQUEST);
-    recvd = recv(conn->socket, buf, BUFSIZE, 0);
+    recvd = recv(conn->socket, buf, sizeof(buf), 0);
     if (debug)
         printf("poll_recv_request(%d) got %d bytes\n",
                conn->socket, (int)recvd);
@@ -1935,7 +1934,6 @@ static void poll_recv_request(struct connection *conn) {
         return;
     }
     conn->last_active = now;
-    #undef BUFSIZE
 
     /* append to conn->request */
     assert(recvd > 0);
@@ -2046,11 +2044,10 @@ static ssize_t send_from_file(const int s, const int fd,
         size = 1<<20;
     return sendfile(s, fd, &ofs, size);
 #else
-    #define BUFSIZE 20000
-    char buf[BUFSIZE];
-    size_t amount = min((size_t)BUFSIZE, size);
+
+    char buf[1<<15];
+    size_t amount = min(sizeof(buf), size);
     ssize_t numread;
-    #undef BUFSIZE
 
     if (lseek(fd, ofs, SEEK_SET) == -1)
         err(1, "fseek(%d)", (int)ofs);
@@ -2150,9 +2147,8 @@ static void httpd_poll(void) {
     max_fd = 0;
 
     /* set recv/send fd_sets */
-    #define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
-                                    max_fd = (max_fd<sock) ? sock : max_fd; }
-
+#define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
+                                max_fd = (max_fd<sock) ? sock : max_fd; }
     MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
@@ -2176,7 +2172,7 @@ static void httpd_poll(void) {
         default: errx(1, "invalid state");
         }
     }
-    #undef MAX_FD_SET
+#undef MAX_FD_SET
 
     /* -select- */
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
