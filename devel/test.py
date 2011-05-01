@@ -15,8 +15,8 @@ class Conn:
         self.s.connect(("0.0.0.0", self.port))
         # connect throws socket.error on connection refused
 
-    def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}):
-        req = "GET "+url
+    def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}, method="GET"):
+        req = method+" "+url
         if http_ver is not None:
             req += " HTTP/"+http_ver
         req += endl
@@ -170,6 +170,13 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
         self.assertEquals(body, self.data)
+
+    def test_file_head(self):
+        resp = Conn().get(self.url, method="HEAD")
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "200 OK")
+        self.assertEquals(hdrs["Content-Length"], str(self.datalen))
+        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
 
 if __name__ == '__main__':
     setUpModule()
