@@ -2403,8 +2403,6 @@ int main(int argc, char **argv) {
         err(1, "signal(ignore SIGPIPE)");
     if (signal(SIGINT, stop_running) == SIG_ERR)
         err(1, "signal(SIGINT)");
-    if (signal(SIGQUIT, stop_running) == SIG_ERR)
-        err(1, "signal(SIGQUIT)");
     if (signal(SIGTERM, stop_running) == SIG_ERR)
         err(1, "signal(SIGTERM)");
 
