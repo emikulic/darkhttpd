@@ -1795,8 +1795,18 @@ static void process_get(struct connection *conn) {
             (strcmp(if_mod_since, lastmod) == 0)) {
         if (debug)
             printf("not modified since %s\n", if_mod_since);
-        default_reply(conn, 304, "Not Modified", "");
+        conn->http_code = 304;
+        conn->header_length = xasprintf(&(conn->header),
+         "HTTP/1.1 304 Not Modified\r\n"
+         "Date: %s\r\n"
+         "Server: %s\r\n"
+         "%s" /* keep-alive */
+         "\r\n",
+         rfc1123_date(date, now), pkgname, keep_alive(conn));
+        conn->reply_length = 0;
+        conn->reply_type = REPLY_GENERATED;
         conn->header_only = 1;
+
         free(if_mod_since);
         return;
     }
