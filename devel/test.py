@@ -217,7 +217,13 @@ class TestFileGet(TestHelper):
             self.datalen-25, self.datalen-1, self.datalen),
             25, self.data[-25:])
 
-    def test_range_bad(self):
+    def test_range_bad_end(self):
+        # expecting same result as test_range_negative
+        self.drive_range("%d-%d"%(self.datalen-25, self.datalen*2),
+            "%d-%d/%d"%(self.datalen-25, self.datalen-1, self.datalen),
+            25, self.data[-25:])
+
+    def test_range_bad_start(self):
         resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=%d-"%(
             self.datalen*2)})
         status, hdrs, body = parse(resp)
