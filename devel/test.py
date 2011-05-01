@@ -4,6 +4,7 @@ import socket
 import signal
 import re
 import os
+import random
 
 WWWROOT = "tmp.httpd.tests"
 
@@ -149,6 +150,26 @@ def setUpModule():
         ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
         ]:
         makeSimpleCases(*args)
+
+class TestFileGet(TestHelper):
+    def setUp(self):
+        self.datalen = 2345
+        self.data = "".join(
+            [chr(random.randint(0,255)) for _ in xrange(self.datalen)])
+        self.url = "/data.jpeg"
+        self.fn = WWWROOT + self.url
+        open(self.fn, "w").write(self.data)
+
+    def tearDown(self):
+        os.unlink(self.fn)
+
+    def test_file_get(self):
+        resp = Conn().get(self.url)
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "200 OK")
+        self.assertEquals(hdrs["Content-Length"], str(self.datalen))
+        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertEquals(body, self.data)
 
 if __name__ == '__main__':
     setUpModule()
