@@ -1425,14 +1425,8 @@ static void parse_range_field(struct connection *conn) {
             conn->range_end_given = 1;
             conn->range_end = (off_t)strtoll(range+bound1, NULL, 10);
         }
-    } while(0); /* break handling */
+    } while(0);
     free(range);
-
-    /* sanity check: begin <= end */
-    if (conn->range_begin_given && conn->range_end_given &&
-            (conn->range_begin > conn->range_end)) {
-        conn->range_begin_given = conn->range_end_given = 0;
-    }
 }
 
 /* Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
@@ -1824,25 +1818,38 @@ static void process_get(struct connection *conn) {
             from = conn->range_begin;
             to = conn->range_end;
 
-            /* clamp [to] to filestat.st_size-1 */
-            if (to > (size_t)(filestat.st_size-1))
-                to = filestat.st_size-1;
+            /* clamp end to filestat.st_size-1 */
+            if (to > (filestat.st_size - 1))
+                to = filestat.st_size - 1;
         }
         else if (conn->range_begin_given && !conn->range_end_given) {
             /* 100- :: yields 100 to end */
             from = conn->range_begin;
-            to = filestat.st_size-1;
+            to = filestat.st_size - 1;
         }
         else if (!conn->range_begin_given && conn->range_end_given) {
             /* -200 :: yields last 200 */
-            to = filestat.st_size-1;
+            to = filestat.st_size - 1;
             from = to - conn->range_end + 1;
 
-            /* check for wrapping */
-            if (from > to) from = 0;
+            /* clamp start */
+            if (from < 0)
+                from = 0;
         }
         else
             errx(1, "internal error - from/to mismatch");
+
+        if (from >= filestat.st_size) {
+            default_reply(conn, 416, "Requested Range Not Satisfiable",
+                "You requested a range outside of the file.");
+            return;
+        }
+
+        if (to < from) {
+            default_reply(conn, 416, "Requested Range Not Satisfiable",
+                "You requested a backward range.");
+            return;
+        }
 
         conn->reply_start = from;
         conn->reply_length = to - from + 1;
