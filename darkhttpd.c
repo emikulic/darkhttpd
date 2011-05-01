@@ -840,58 +840,35 @@ static void init_sockin(void) {
     }
 }
 
-static void usage(void) {
-    printf("\n"
-    "usage: darkhttpd /path/to/wwwroot [options]\n\n"
-    "options:\n\n");
-    printf(
-    "\t--port number (default: %u, or 80 if running as root)\n" /* bindport */
-    "\t\tSpecifies which port to listen on for connections.\n"
-    "\n", bindport);
-    printf(
-    "\t--addr ip (default: all)\n"
+static void usage(const char *argv0) {
+    printf("usage:\t%s /path/to/wwwroot [flags]\n\n", argv0);
+    printf("flags:\t--port number (default: %u, or 80 if running as root)\n"
+    "\t\tSpecifies which port to listen on for connections.\n\n", bindport);
+    printf("\t--addr ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
-    "\t\twhich one to bind the listening port to.\n"
-    "\n");
-    printf(
-    "\t--maxconn number (default: system maximum)\n"
-    "\t\tSpecifies how many concurrent connections to accept.\n"
-    "\n");
-    printf(
-    "\t--log filename (default: stdout)\n"
-    "\t\tSpecifies which file to append the request log to.\n"
-    "\n");
-    printf(
-    "\t--chroot (default: don't chroot)\n"
-    "\t\tLocks server into wwwroot directory for added security.\n"
-    "\n");
-    printf(
-    "\t--daemon (default: don't daemonize)\n"
-    "\t\tDetach from the controlling terminal and run in the background.\n"
-    "\n");
-    printf(
-    "\t--index filename (default: %s)\n" /* index_name */
-    "\t\tDefault file to serve when a directory is requested.\n"
-    "\n", index_name);
-    printf(
-    "\t--mimetypes filename (optional)\n"
-    "\t\tParses specified file for extension-MIME associations.\n"
-    "\n");
-    printf(
-    "\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
-    "\t\tDrops privileges to given uid:gid after initialization.\n"
-    "\n");
-    printf(
-    "\t--pidfile filename (default: no pidfile)\n"
+    "\t\twhich one to bind the listening port to.\n\n");
+    printf("\t--maxconn number (default: system maximum)\n"
+    "\t\tSpecifies how many concurrent connections to accept.\n\n");
+    printf("\t--log filename (default: stdout)\n"
+    "\t\tSpecifies which file to append the request log to.\n\n");
+    printf("\t--chroot (default: don't chroot)\n"
+    "\t\tLocks server into wwwroot directory for added security.\n\n");
+    printf("\t--daemon (default: don't daemonize)\n"
+    "\t\tDetach from the controlling terminal and run in the background.\n\n");
+    printf("\t--index filename (default: %s)\n"
+    "\t\tDefault file to serve when a directory is requested.\n\n",
+        index_name);
+    printf("\t--mimetypes filename (optional)\n"
+    "\t\tParses specified file for extension-MIME associations.\n\n");
+    printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
+    "\t\tDrops privileges to given uid:gid after initialization.\n\n");
+    printf("\t--pidfile filename (default: no pidfile)\n"
     "\t\tWrite PID to the specified file.  Note that if you are\n"
     "\t\tusing --chroot, then the pidfile must be relative to,\n"
-    "\t\tand inside the wwwroot.\n"
-    "\n");
+    "\t\tand inside the wwwroot.\n\n");
 #ifdef __FreeBSD__
-    printf(
-    "\t--accf (default: don't use acceptfilter)\n"
-    "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n"
-    "\n");
+    printf("\t--accf (default: don't use acceptfilter)\n"
+    "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n\n");
 #endif
 }
 
@@ -914,7 +891,7 @@ static void parse_commandline(const int argc, char *argv[]) {
     size_t len;
 
     if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
-        usage(); /* no wwwroot given */
+        usage(argv[0]); /* no wwwroot given */
         exit(EXIT_FAILURE);
     }
 
