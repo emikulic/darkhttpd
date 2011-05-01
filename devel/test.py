@@ -204,24 +204,34 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Length"], str(len_out))
         self.assertEquals(body, data_out)
 
+    def test_range_single(self):
+        self.drive_range("5-5", "5-5/%d" % self.datalen,
+            1, self.data[5])
+
     def test_range_reasonable(self):
         self.drive_range("10-20", "10-20/%d" % self.datalen,
             20-10+1, self.data[10:20+1])
 
-    def test_range_tail(self):
+    def test_range_start_given(self):
         self.drive_range("10-", "10-%d/%d" % (self.datalen-1, self.datalen),
             self.datalen-10, self.data[10:])
 
-    def test_range_negative(self):
-        self.drive_range("-25", "%d-%d/%d" % (
-            self.datalen-25, self.datalen-1, self.datalen),
+    def test_range_end_given(self):
+        self.drive_range("-25",
+            "%d-%d/%d"%(self.datalen-25, self.datalen-1, self.datalen),
             25, self.data[-25:])
 
-    def test_range_bad_end(self):
-        # expecting same result as test_range_negative
+    def test_range_beyond_end(self):
+        # expecting same result as test_range_end_given
         self.drive_range("%d-%d"%(self.datalen-25, self.datalen*2),
             "%d-%d/%d"%(self.datalen-25, self.datalen-1, self.datalen),
             25, self.data[-25:])
+
+    def test_range_end_given_oversize(self):
+        # expecting full file
+        self.drive_range("-%d"%(self.datalen*3),
+            "0-%d/%d"%(self.datalen-1, self.datalen),
+            self.datalen, self.data)
 
     def test_range_bad_start(self):
         resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=%d-"%(
