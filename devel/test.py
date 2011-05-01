@@ -229,6 +229,11 @@ class TestFileGet(TestHelper):
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
 
+    def test_range_backwards(self):
+        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=20-10"})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "416 Requested Range Not Satisfiable")
+
 if __name__ == '__main__':
     setUpModule()
     unittest.main()
