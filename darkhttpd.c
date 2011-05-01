@@ -1301,6 +1301,7 @@ static void default_reply(struct connection *conn,
      "HTTP/1.1 %d %s\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
+     "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html\r\n"
@@ -1338,6 +1339,7 @@ static void redirect(struct connection *conn, const char *format, ...) {
      "HTTP/1.1 301 Moved Permanently\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
+     /* "Accept-Ranges: bytes\r\n" - not relevant here */
      "Location: %s\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
@@ -1698,6 +1700,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
      "HTTP/1.1 200 OK\r\n"
      "Date: %s\r\n"
      "Server: %s\r\n"
+     "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html\r\n"
@@ -1800,6 +1803,7 @@ static void process_get(struct connection *conn) {
          "HTTP/1.1 304 Not Modified\r\n"
          "Date: %s\r\n"
          "Server: %s\r\n"
+         "Accept-Ranges: bytes\r\n"
          "%s" /* keep-alive */
          "\r\n",
          rfc1123_date(date, now), pkgname, keep_alive(conn));
@@ -1847,6 +1851,7 @@ static void process_get(struct connection *conn) {
             "HTTP/1.1 206 Partial Content\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
+            "Accept-Ranges: bytes\r\n"
             "%s" /* keep-alive */
             "Content-Length: %llu\r\n"
             "Content-Range: bytes %llu-%llu/%llu\r\n"
@@ -1870,6 +1875,7 @@ static void process_get(struct connection *conn) {
             "HTTP/1.1 200 OK\r\n"
             "Date: %s\r\n"
             "Server: %s\r\n"
+            "Accept-Ranges: bytes\r\n"
             "%s" /* keep-alive */
             "Content-Length: %llu\r\n"
             "Content-Type: %s\r\n"
