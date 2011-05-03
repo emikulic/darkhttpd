@@ -18,8 +18,10 @@ if [ -e $DIR ]; then
 fi
 mkdir $DIR || exit 1
 rm -f darkhttpd.gcda darkhttpd.log
+# display usage statement
+./a.out >/dev/null
+# run all tests against this instance (generates darkhttpd.gcda)
 ./a.out $DIR --port $PORT --log darkhttpd.log &
-# generates darkhttpd.gcda
 PID=$!
 kill -0 $PID || exit 1
 python test.py
