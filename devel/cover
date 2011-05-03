@@ -9,7 +9,7 @@ if [ ! -e test.py ]; then
 	echo "can't find test.py, aborting" >&2
 	exit 1
 fi
-if [ ! -x a.out ]; then
+if [ \( ! -x a.out \) -o \( ../darkhttpd.c -nt a.out \) ]; then
 	gcc -g -fprofile-arcs -ftest-coverage ../darkhttpd.c || exit 1
 	# generates a.out, darkhttpd.gcno
 fi
