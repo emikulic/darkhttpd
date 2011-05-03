@@ -321,7 +321,7 @@ static void xclose(const int fd) {
 static void *xmalloc(const size_t size) {
     void *ptr = malloc(size);
     if (ptr == NULL)
-        errx(1, "can't allocate %u bytes", size);
+        errx(1, "can't allocate %zu bytes", size);
     return ptr;
 }
 
@@ -329,7 +329,7 @@ static void *xmalloc(const size_t size) {
 static void *xrealloc(void *original, const size_t size) {
     void *ptr = realloc(original, size);
     if (ptr == NULL)
-        errx(1, "can't reallocate %u bytes", size);
+        errx(1, "can't reallocate %zu bytes", size);
     return ptr;
 }
 
@@ -706,7 +706,7 @@ static char *read_line(FILE *fp) {
         err(1, "fseek()");
     numread = fread(buf, 1, linelen, fp);
     if (numread != linelen)
-        errx(1, "fread() %u bytes, expecting %u bytes", numread, linelen);
+        errx(1, "fread() %zu bytes, expecting %zu bytes", numread, linelen);
 
     /* terminate buffer */
     buf[linelen] = 0;
@@ -2473,8 +2473,8 @@ int main(int argc, char **argv) {
             (unsigned int)r.ru_stime.tv_sec,
                 (unsigned int)(r.ru_stime.tv_usec/10000)
         );
-        printf("Requests: %llu\n", num_requests);
-        printf("Bytes: %llu in, %llu out\n", total_in, total_out);
+        printf("Requests: %llu\n", llu(num_requests));
+        printf("Bytes: %llu in, %llu out\n", llu(total_in), llu(total_out));
     }
 
     return 0;
