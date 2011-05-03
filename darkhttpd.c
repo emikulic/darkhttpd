@@ -75,6 +75,7 @@ static const int debug = 1;
 #define O_EXLOCK O_EXCL
 #endif
 
+#ifndef __printflike
 #ifdef __GNUC__
 /* [->] borrowed from FreeBSD's src/sys/sys/cdefs.h,v 1.102.2.2.2.1 */
 #define __printflike(fmtarg, firstvararg) \
@@ -82,6 +83,7 @@ static const int debug = 1;
 /* [<-] */
 #else
 #define __printflike(fmtarg, firstvararg)
+#endif
 #endif
 
 /* [->] borrowed from FreeBSD's src/sys/sys/systm.h,v 1.276.2.7.4.1 */
