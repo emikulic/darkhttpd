@@ -334,6 +334,7 @@ static const char *default_extension_map[] = {
     "video/mpeg"           " mpeg mpe mpg",
     "video/quicktime"      " qt mov",
     "video/x-msvideo"      " avi",
+    "video/mp4"            " mp4",
     NULL
 };
 
