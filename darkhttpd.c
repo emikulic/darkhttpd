@@ -275,7 +275,8 @@ static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
-static int want_chroot = 0, want_daemon = 0, want_accf = 0;
+static int want_chroot = 0, want_daemon = 0, want_accf = 0,
+           want_keepalive = 1;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 
 static int running = 1; /* signal handler sets this to false */
@@ -309,10 +310,6 @@ static const char *default_extension_map[] = {
 };
 
 static const char default_mimetype[] = "application/octet-stream";
-
-/* Connection or Keep-Alive field, depending on conn_close. */
-#define keep_alive(conn) ((conn)->conn_close ? \
-    "Connection: close\r\n" : keep_alive_field)
 
 /* Prototypes. */
 static void poll_recv_request(struct connection *conn);
@@ -876,6 +873,8 @@ static void usage(const char *argv0) {
     "\t\tWrite PID to the specified file.  Note that if you are\n"
     "\t\tusing --chroot, then the pidfile must be relative to,\n"
     "\t\tand inside the wwwroot.\n\n");
+    printf("\t--no-keepalive\n"
+    "\t\tDisables HTTP Keep-Alive functionality.\n\n");
 #ifdef __FreeBSD__
     printf("\t--accf (default: don't use acceptfilter)\n"
     "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n\n");
@@ -984,6 +983,9 @@ static void parse_commandline(const int argc, char *argv[]) {
             if (++i >= argc)
                 errx(1, "missing filename after --pidfile");
             pidfile_name = argv[i];
+        }
+        else if (strcmp(argv[i], "--no-keepalive") == 0) {
+            want_keepalive = 0;
         }
         else if (strcmp(argv[i], "--accf") == 0) {
             want_accf = 1;
@@ -1258,6 +1260,10 @@ static char *urldecode(const char *url) {
     return out;
 }
 
+/* Connection or Keep-Alive header, depending on conn_close */
+#define keep_alive(conn) ((conn)->conn_close ? \
+    "Connection: close\r\n" : keep_alive_field )
+
 /* A default reply for any (erroneous) occasion. */
 static void default_reply(struct connection *conn,
         const int errcode, const char *errname, const char *format, ...)
@@ -1486,6 +1492,10 @@ static int parse_request(struct connection *conn) {
             conn->conn_close = 0;
         free(tmp);
     }
+
+    /* cmdline flag can be used to deny keep-alive */
+    if (!want_keepalive)
+        conn->conn_close = 1;
 
     /* parse important fields */
     conn->referer = parse_field(conn, "Referer: ");
