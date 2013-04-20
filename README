@@ -45,6 +45,10 @@ Use acceptfilter (FreeBSD only):
 Run in the background and create a pidfile:
 	$ ./darkhttpd /var/www/htdocs --pidfile /var/run/httpd.pid --daemon
 
+Web forward (301) requests for some hosts:
+	$ ./darkhttpd /var/www/htdocs --forward example.com http://www.example.com \
+		--forward secure.example.com https://www.example.com/secure
+
 Commandline options can be combined:
 	$ ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
 

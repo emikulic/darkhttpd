@@ -227,6 +227,14 @@ struct connection {
           total_sent; /* header + body = total, for logging */
 };
 
+struct web_forward_record {
+    const char *host;
+    const char *target;
+    struct web_forward_record *next;
+};
+
+struct web_forward_record *web_forward = NULL;
+
 struct mime_mapping {
     char *extension, *mimetype;
 };
@@ -552,6 +560,21 @@ static char *make_safe_url(char *url) {
     return url;
 }
 
+static void add_web_forward(const char * const host, const char * const target) {
+    if (debug)
+        printf("add web forward %s -> %s\n",
+               host, target);
+
+    struct web_forward_record **ref_ptr = &web_forward;
+    while(*ref_ptr) {
+        ref_ptr = &((*ref_ptr)->next);
+    }
+    (*ref_ptr) = xmalloc(sizeof(struct web_forward_record));
+    (*ref_ptr)->host = host;
+    (*ref_ptr)->target = target;
+    (*ref_ptr)->next = NULL;
+}
+
 /* Associates an extension with a mimetype in the mime_map.  Entries are in
  * unsorted order.  Makes copies of extension and mimetype strings.
  */
@@ -867,6 +890,11 @@ static void usage(const char *argv0) {
     printf("\t--accf (default: don't use acceptfilter)\n"
     "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n\n");
 #endif
+    printf("\t--forward host url (default: don't forward)\n"
+    "\t\tWeb forward (301 redirect).\n"
+    "\t\tRequests to the host are redirected to the corresponding url.\n"
+    "\t\tThe option may be specified multiple times. In the case\n"
+    "\t\tthe host is matched in the order of appearance.\n\n");
 }
 
 /* Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
@@ -977,6 +1005,15 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--accf") == 0) {
             want_accf = 1;
+        }
+        else if (strcmp(argv[i], "--forward") == 0) {
+            if (++i >= argc)
+                errx(1, "missing host after --forward");
+            const char * const host = argv[i];
+            if (++i >= argc)
+                errx(1, "missing url after --forward");
+            const char * const url = argv[i];
+            add_web_forward(host, url);
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -1707,6 +1744,32 @@ static void process_get(struct connection *conn) {
                       "You requested an invalid URL: %s", conn->url);
         free(decoded_url);
         return;
+    }
+
+    /* test the host against web forward options */
+    {
+        char *host = parse_field(conn, "Host: ");
+        if(host) {
+            if (debug)
+                printf("host=\"%s\"\n", host);
+
+            struct web_forward_record *ptr = web_forward;
+            for(; ptr; ptr=ptr->next) {
+                if (debug)
+                    printf("test for web forward record \"%s\" -> \"%s\"\n", ptr->host, ptr->target);
+
+                if(!strcasecmp(ptr->host, host)) {
+
+                    redirect(conn, "%s%s", ptr->target, decoded_url);
+
+                    free(decoded_url);
+                    free(host);
+                    return;
+                    
+                }
+            }
+            free(host);
+        }
     }
 
     /* does it end in a slash? serve up url/index_name */
