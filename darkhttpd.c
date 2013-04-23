@@ -1759,7 +1759,7 @@ static void process_get(struct connection *conn) {
     }
 
     /* test the host against web forward options */
-    {
+    if (forward_map) {
         char *host = parse_field(conn, "Host: ");
         if (host) {
             size_t i;
