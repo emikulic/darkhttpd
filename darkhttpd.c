@@ -227,13 +227,12 @@ struct connection {
           total_sent; /* header + body = total, for logging */
 };
 
-struct web_forward_record {
-    const char *host;
-    const char *target;
-    struct web_forward_record *next;
+struct forward_mapping {
+    const char *host, *target_url; /* These point at argv. */
 };
 
-struct web_forward_record *web_forward = NULL;
+static struct forward_mapping *forward_map = NULL;
+static size_t forward_map_size = 0;
 
 struct mime_mapping {
     char *extension, *mimetype;
@@ -504,7 +503,7 @@ static char *make_safe_url(char *url) {
         ends_in_slash = 1;
 
     /* count the slashes */
-    for (i=0, num_slashes=0; i<urllen; i++)
+    for (i=0, num_slashes=0; i < urllen; i++)
         if (url[i] == '/')
             num_slashes++;
 
@@ -560,19 +559,13 @@ static char *make_safe_url(char *url) {
     return url;
 }
 
-static void add_web_forward(const char * const host, const char * const target) {
-    if (debug)
-        printf("add web forward %s -> %s\n",
-               host, target);
-
-    struct web_forward_record **ref_ptr = &web_forward;
-    while(*ref_ptr) {
-        ref_ptr = &((*ref_ptr)->next);
-    }
-    (*ref_ptr) = xmalloc(sizeof(struct web_forward_record));
-    (*ref_ptr)->host = host;
-    (*ref_ptr)->target = target;
-    (*ref_ptr)->next = NULL;
+static void add_forward_mapping(const char * const host,
+                                const char * const target_url) {
+    forward_map_size++;
+    forward_map = xrealloc(forward_map,
+                           sizeof(*forward_map) * forward_map_size);
+    forward_map[forward_map_size - 1].host = host;
+    forward_map[forward_map_size - 1].target_url = target_url;
 }
 
 /* Associates an extension with a mimetype in the mime_map.  Entries are in
@@ -893,8 +886,8 @@ static void usage(const char *argv0) {
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
-    "\t\tThe option may be specified multiple times. In the case\n"
-    "\t\tthe host is matched in the order of appearance.\n\n");
+    "\t\tThe option may be specified multiple times, in which case\n"
+    "\t\tthe host is matched in order of appearance.\n\n");
 }
 
 /* Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
@@ -1007,13 +1000,14 @@ static void parse_commandline(const int argc, char *argv[]) {
             want_accf = 1;
         }
         else if (strcmp(argv[i], "--forward") == 0) {
+            const char *host, *url;
             if (++i >= argc)
                 errx(1, "missing host after --forward");
-            const char * const host = argv[i];
+            host = argv[i];
             if (++i >= argc)
                 errx(1, "missing url after --forward");
-            const char * const url = argv[i];
-            add_web_forward(host, url);
+            url = argv[i];
+            add_forward_mapping(host, url);
         }
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -1749,23 +1743,17 @@ static void process_get(struct connection *conn) {
     /* test the host against web forward options */
     {
         char *host = parse_field(conn, "Host: ");
-        if(host) {
+        if (host) {
+            size_t i;
             if (debug)
                 printf("host=\"%s\"\n", host);
-
-            struct web_forward_record *ptr = web_forward;
-            for(; ptr; ptr=ptr->next) {
-                if (debug)
-                    printf("test for web forward record \"%s\" -> \"%s\"\n", ptr->host, ptr->target);
-
-                if(!strcasecmp(ptr->host, host)) {
-
-                    redirect(conn, "%s%s", ptr->target, decoded_url);
-
-                    free(decoded_url);
+            for (i = 0; i < forward_map_size; i++) {
+                if (strcasecmp(forward_map[i].host, host) == 0) {
+                    redirect(conn, "%s%s",
+                             forward_map[i].target_url, decoded_url);
                     free(host);
+                    free(decoded_url);
                     return;
-                    
                 }
             }
             free(host);
@@ -2521,12 +2509,13 @@ int main(int argc, char **argv) {
     /* free the mallocs */
     {
         size_t i;
-
         for (i=0; i<mime_map_size; i++) {
             free(mime_map[i].extension);
             free(mime_map[i].mimetype);
         }
         free(mime_map);
+        if (forward_map)
+            free(forward_map);
         free(keep_alive_field);
         free(wwwroot);
     }
