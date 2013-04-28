@@ -1,48 +1,13 @@
 #!/bin/sh
 #
-# Build with clang with all warnings
+# Build with clang with all warnings.
 #
+TARGET=$(dirname $0)/../darkhttpd.c
 
 # Adjust to suit:
 LLVM=$HOME/llvm
-CLANG=$LLVM/build/Release/bin/clang
 
-BDECFLAGS="-W -Wall -pedantic -Wbad-function-cast -Wcast-align \
--Wcast-qual -Wchar-subscripts -Winline \
--Wmissing-prototypes -Wnested-externs -Wpointer-arith \
--Wredundant-decls -Wshadow -Wstrict-prototypes -Wwrite-strings"
-# local change: removed -ansi above
-
-# disabled:
-# -Wunreachable-code
-
-$CLANG -std=c99 $BDECFLAGS \
--Wextra -Waddress -Waggregate-return \
--Wcomment \
--Wdisabled-optimization \
--Wconversion \
--Wempty-body \
--Wfloat-equal -Wformat -Wformat=2 \
--Wformat-nonliteral \
--Wformat-security -Wformat-y2k \
--Wignored-qualifiers -Wimplicit \
--Winit-self \
--Winvalid-pch \
--Wlong-long -Wmain \
--Wmissing-braces -Wmissing-field-initializers -Wmissing-format-attribute \
--Wmissing-include-dirs -Wmissing-noreturn \
--Woverlength-strings -Wpacked \
--Wpadded -Wparentheses \
--Wreturn-type -Wsequence-point -Wsign-compare \
--Wstack-protector -Wstrict-aliasing \
--Wstrict-overflow -Wstrict-overflow=5 -Wswitch \
--Wswitch-default -Wswitch-enum -Wtrigraphs \
--Wtype-limits -Wundef -Wuninitialized -Wunknown-pragmas \
--Wunused -Wunused-function -Wunused-label \
--Wunused-parameter -Wunused-value -Wunused-variable \
--Wvariadic-macros -Wvla -Wvolatile-register-var \
--Wabi \
--O -pipe -fstrict-aliasing ../darkhttpd.c
-
-echo errcode: $?
+$LLVM/install/bin/clang \
+  -Weverything -Wno-unreachable-code -Wno-padded \
+  -O $TARGET
 rm -f a.out

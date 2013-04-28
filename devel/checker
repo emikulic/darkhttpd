@@ -1,12 +1,14 @@
 #!/bin/sh
 #
-# Run through the clang static analyzer
+# Run through the clang static analyzer.
 #
+TARGET=$(dirname $0)/../darkhttpd.c
 
 # Adjust to suit:
 LLVM=$HOME/llvm
 CHECKER=$LLVM/llvm/tools/clang/tools/scan-build/ccc-analyzer
 
-env PATH=$LLVM/build/Release/bin:$PATH $CHECKER ../darkhttpd.c
-
-rm -f a.out
+$LLVM/llvm/tools/clang/tools/scan-build/scan-build \
+  -analyze-headers \
+  --use-analyzer=$LLVM/install/bin/clang \
+  clang $TARGET
