@@ -1611,7 +1611,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     ssize_t listsize;
     size_t maxlen = 2; /* There has to be ".." */
     int i;
-    struct apbuf *listing = make_apbuf();
+    struct apbuf *listing;
 
     listsize = make_sorted_dirlist(path, &list);
     if (listsize == -1) {
@@ -1626,6 +1626,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
             maxlen = tmp;
     }
 
+    listing = make_apbuf();
     append(listing, "<html>\n<head>\n <title>");
     append(listing, conn->url);
     append(listing, "</title>\n</head>\n<body>\n<h1>");
