@@ -23,7 +23,7 @@ rm -f darkhttpd.gcda darkhttpd.log
 ./a.out >/dev/null
 
 # run tests against a basic instance (generates darkhttpd.gcda)
-./a.out $DIR --port $PORT --log darkhttpd.log &
+./a.out $DIR --port $PORT --log darkhttpd.log >/dev/null &
 PID=$!
 kill -0 $PID || exit 1
 python test.py
@@ -32,10 +32,17 @@ kill $PID
 # run forward tests
 ./a.out $DIR --port $PORT \
   --forward example.com http://www.example.com \
-  --forward secure.example.com https://www.example.com/secure &
+  --forward secure.example.com https://www.example.com/secure >/dev/null &
 PID=$!
 kill -0 $PID || exit 1
 python test_forward.py
+kill $PID
+
+# run no-server-id tests
+./a.out $DIR --port $PORT --no-server-id >/dev/null &
+PID=$!
+kill -0 $PID || exit 1
+python test_server_id.py
 kill $PID
 
 echo generating darkhttpd.c.gcov report

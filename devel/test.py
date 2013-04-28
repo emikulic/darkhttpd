@@ -195,6 +195,7 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertContains(hdrs["Server"], "darkhttpd/")
         self.assertEquals(body, self.data)
 
     def test_file_head(self):
