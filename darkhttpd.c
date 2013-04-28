@@ -18,7 +18,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.8",
+    pkgname[]   = "darkhttpd/1.9.from.git",
     copyright[] = "copyright (c) 2003-2013 Emil Mikulic";
 
 #ifndef DEBUG
