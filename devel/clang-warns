@@ -7,7 +7,7 @@ TARGET=$(dirname $0)/../darkhttpd.c
 # Adjust to suit:
 LLVM=$HOME/llvm
 
-$LLVM/install/bin/clang \
-  -Weverything -Wno-unreachable-code -Wno-padded \
-  -O $TARGET
+$LLVM/install/bin/clang -Weverything -O \
+  -Wno-unreachable-code -Wno-padded -Wno-disabled-macro-expansion \
+  $TARGET
 rm -f a.out

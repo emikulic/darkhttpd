@@ -22,20 +22,20 @@ static const char
     copyright[] = "copyright (c) 2003-2013 Emil Mikulic";
 
 #ifndef DEBUG
-#define NDEBUG
+# define NDEBUG
 static const int debug = 0;
 #else
 static const int debug = 1;
 #endif
 
 #ifdef __linux
-#define _GNU_SOURCE /* for strsignal() and vasprintf() */
-#define _FILE_OFFSET_BITS 64 /* stat() files bigger than 2GB */
-#include <sys/sendfile.h>
+# define _GNU_SOURCE /* for strsignal() and vasprintf() */
+# define _FILE_OFFSET_BITS 64 /* stat() files bigger than 2GB */
+# include <sys/sendfile.h>
 #endif
 
 #ifdef __sun__
-#include <sys/sendfile.h>
+# include <sys/sendfile.h>
 #endif
 
 #include <sys/types.h>
@@ -63,43 +63,39 @@ static const int debug = 1;
 #include <unistd.h>
 
 #ifdef __sun__
-#ifndef INADDR_NONE
-#define INADDR_NONE -1
-#endif
+# ifndef INADDR_NONE
+#  define INADDR_NONE -1
+# endif
 #endif
 
 #ifndef MAXNAMLEN
- #ifdef NAME_MAX
- #define MAXNAMLEN NAME_MAX
- #else
- #define MAXNAMLEN   255
- #endif
-#endif
-
-#ifndef min
-#define min(a,b) ( ((a)<(b)) ? (a) : (b) )
+# ifdef NAME_MAX
+#  define MAXNAMLEN NAME_MAX
+# else
+#  define MAXNAMLEN   255
+# endif
 #endif
 
 #if defined(O_EXCL) && !defined(O_EXLOCK)
-#define O_EXLOCK O_EXCL
+# define O_EXLOCK O_EXCL
 #endif
 
 #ifndef __printflike
-#ifdef __GNUC__
+# ifdef __GNUC__
 /* [->] borrowed from FreeBSD's src/sys/sys/cdefs.h,v 1.102.2.2.2.1 */
-#define __printflike(fmtarg, firstvararg) \
-            __attribute__((__format__(__printf__, fmtarg, firstvararg)))
+#  define __printflike(fmtarg, firstvararg) \
+             __attribute__((__format__(__printf__, fmtarg, firstvararg)))
 /* [<-] */
-#else
-#define __printflike(fmtarg, firstvararg)
-#endif
+# else
+#  define __printflike(fmtarg, firstvararg)
+# endif
 #endif
 
 /* [->] borrowed from FreeBSD's src/sys/sys/systm.h,v 1.276.2.7.4.1 */
 #ifndef CTASSERT                /* Allow lint to override */
-#define CTASSERT(x)             _CTASSERT(x, __LINE__)
-#define _CTASSERT(x, y)         __CTASSERT(x, y)
-#define __CTASSERT(x, y)        typedef char __assert ## y[(x) ? 1 : -1]
+# define CTASSERT(x)             _CTASSERT(x, __LINE__)
+# define _CTASSERT(x, y)         __CTASSERT(x, y)
+# define __CTASSERT(x, y)        typedef char __assert ## y[(x) ? 1 : -1]
 #endif
 /* [<-] */
 
@@ -107,7 +103,7 @@ CTASSERT(sizeof(unsigned long long) >= sizeof(off_t));
 #define llu(x) ((unsigned long long)(x))
 
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__linux)
-#include <err.h>
+# include <err.h>
 #else
 /* err - prints "error: format: strerror(errno)" to stderr and exit()s with
  * the given code.
@@ -172,19 +168,10 @@ struct {                                                                \
 
 #define LIST_FIRST(head)        ((head)->lh_first)
 
-#define LIST_FOREACH(var, head, field)                                  \
-        for ((var) = LIST_FIRST((head));                                \
-            (var);                                                      \
-            (var) = LIST_NEXT((var), field))
-
 #define LIST_FOREACH_SAFE(var, head, field, tvar)                       \
     for ((var) = LIST_FIRST((head));                                    \
         (var) && ((tvar) = LIST_NEXT((var), field), 1);                 \
         (var) = (tvar))
-
-#define LIST_INIT(head) do {                                            \
-        LIST_FIRST((head)) = NULL;                                      \
-} while (0)
 
 #define LIST_INSERT_HEAD(head, elm, field) do {                         \
         if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)     \
@@ -203,7 +190,7 @@ struct {                                                                \
 } while (0)
 /* [<-] */
 
-LIST_HEAD(conn_list_head, connection) connlist =
+static LIST_HEAD(conn_list_head, connection) connlist =
     LIST_HEAD_INITIALIZER(conn_list_head);
 
 struct connection {
@@ -244,9 +231,9 @@ struct mime_mapping {
     char *extension, *mimetype;
 };
 
-struct mime_mapping *mime_map = NULL;
-size_t mime_map_size = 0;
-size_t longest_ext = 0;
+static struct mime_mapping *mime_map = NULL;
+static size_t mime_map_size = 0;
+static size_t longest_ext = 0;
 
 /* If a connection is idle for idletime seconds or more, it gets closed and
  * removed from the connlist.  Set to 0 to remove the timeout
@@ -569,7 +556,7 @@ static char *make_safe_url(char *url) {
  * unsorted order.  Makes copies of extension and mimetype strings.
  */
 static void add_mime_mapping(const char *extension, const char *mimetype) {
-    unsigned int i;
+    size_t i;
     assert(strlen(extension) > 0);
     assert(strlen(mimetype) > 0);
 
@@ -579,7 +566,7 @@ static void add_mime_mapping(const char *extension, const char *mimetype) {
         longest_ext = i;
 
     /* look through list and replace an existing entry if possible */
-    for (i=0; i<mime_map_size; i++)
+    for (i = 0; i < mime_map_size; i++)
         if (strcmp(mime_map[i].extension, extension) == 0) {
             free(mime_map[i].mimetype);
             mime_map[i].mimetype = xstrdup(mimetype);
@@ -590,8 +577,8 @@ static void add_mime_mapping(const char *extension, const char *mimetype) {
     mime_map_size++;
     mime_map = xrealloc(mime_map,
         sizeof(struct mime_mapping) * mime_map_size);
-    mime_map[mime_map_size-1].extension = xstrdup(extension);
-    mime_map[mime_map_size-1].mimetype = xstrdup(mimetype);
+    mime_map[mime_map_size - 1].extension = xstrdup(extension);
+    mime_map[mime_map_size - 1].mimetype = xstrdup(mimetype);
 }
 
 /* qsort() the mime_map.  The map must be sorted before it can be
@@ -1687,7 +1674,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     append(listing, "\n</body>\n</html>\n");
 
     conn->reply = listing->str;
-    conn->reply_length = listing->length;
+    conn->reply_length = (off_t)listing->length;
     free(listing); /* don't free inside of listing */
 
     conn->header_length = xasprintf(&(conn->header),
@@ -2067,7 +2054,10 @@ static ssize_t send_from_file(const int s, const int fd,
         size = 1<<20;
     return sendfile(s, fd, &ofs, size);
 #else
-
+    /* Fake sendfile() with read(). */
+# ifndef min
+#  define min(a,b) ( ((a)<(b)) ? (a) : (b) )
+# endif
     char buf[1<<15];
     size_t amount = min(sizeof(buf), size);
     ssize_t numread;
@@ -2191,8 +2181,6 @@ static void httpd_poll(void) {
             MAX_FD_SET(conn->socket, &send_set);
             bother_with_timeout = 1;
             break;
-
-        default: errx(1, "invalid state");
         }
     }
 #undef MAX_FD_SET
@@ -2237,8 +2225,6 @@ static void httpd_poll(void) {
         case DONE:
             /* (handled later; ignore for now as it's a valid state) */
             break;
-
-        default: errx(1, "invalid state");
         }
 
         if (conn->state == DONE) {
@@ -2320,7 +2306,7 @@ static void daemonize_finish(void) {
         close(fd_null);
 }
 
-/* [<-] pidfile helpers, based on FreeBSD src/lib/libutil/pidfile.c,v 1.3
+/* [->] pidfile helpers, based on FreeBSD src/lib/libutil/pidfile.c,v 1.3
  * Original was copyright (c) 2005 Pawel Jakub Dawidek <pjd@FreeBSD.org>
  */
 static int pidfile_fd = -1;
@@ -2343,7 +2329,7 @@ static int pidfile_read(void) {
     if (fd == -1)
         err(1, " after create failed");
 
-    i = read(fd, buf, sizeof(buf) - 1);
+    i = (int)read(fd, buf, sizeof(buf) - 1);
     if (i == -1)
         err(1, "read from pidfile failed");
     xclose(fd);
