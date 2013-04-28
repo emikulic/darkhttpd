@@ -2,6 +2,7 @@
 #
 # Coverage and unit tests!
 #
+cd $(dirname $0)
 DIR=tmp.httpd.tests
 PORT=12346
 
@@ -26,6 +27,8 @@ PID=$!
 kill -0 $PID || exit 1
 python test.py
 kill $PID
+echo generating darkhttpd.c.gcov report
 gcov darkhttpd
-# generates darkhttpd.c.gcov
-echo "done!"
+rm -rf $DIR
+rm -f darkhttpd.gcda darkhttpd.gcno darkhttpd.log a.out
+echo done
