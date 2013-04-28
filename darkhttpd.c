@@ -1519,8 +1519,8 @@ static int dlent_cmp(const void *a, const void *b) {
 static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     DIR *dir;
     struct dirent *ent;
-    size_t entries = 0, pool = 0;
-#define POOL_INCR 100
+    size_t entries = 0;
+    size_t pool = 128;
     char *currname;
     struct dlent **list = NULL;
 
@@ -1529,6 +1529,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         return -1;
 
     currname = xmalloc(strlen(path) + MAXNAMLEN + 1);
+    list = xmalloc(sizeof(struct dlent*) * pool);
 
     /* construct list */
     while ((ent = readdir(dir)) != NULL) {
@@ -1541,7 +1542,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         if (stat(currname, &s) == -1)
             continue; /* skip un-stat-able files */
         if (entries == pool) {
-            pool += POOL_INCR;
+            pool *= 2;
             list = xrealloc(list, sizeof(struct dlent*) * pool);
         }
         list[entries] = xmalloc(sizeof(struct dlent));
@@ -1552,12 +1553,9 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     }
     closedir(dir);
     free(currname);
-    assert(list != NULL);
-    if (list) /* there's gotta be at least ".." */
-        qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
-    *output = xrealloc(list, sizeof(struct dlent*) * entries);
+    qsort(list, entries, sizeof(struct dlent*), dlent_cmp);
+    *output = list;
     return (ssize_t)entries;
-#undef POOL_INCR
 }
 
 /* Cleanly deallocate a sorted list of directory files. */
@@ -1611,7 +1609,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
-    size_t maxlen = 0;
+    size_t maxlen = 2; /* There has to be ".." */
     int i;
     struct apbuf *listing = make_apbuf();
 
