@@ -1260,9 +1260,11 @@ static char *urldecode(const char *url) {
     return out;
 }
 
-/* Connection or Keep-Alive header, depending on conn_close */
-#define keep_alive(conn) ((conn)->conn_close ? \
-    "Connection: close\r\n" : keep_alive_field )
+/* Returns Connection or Keep-Alive header, depending on conn_close. */
+static const char *keep_alive(const struct connection *conn)
+{
+    return (conn->conn_close ? "Connection: close\r\n" : keep_alive_field);
+}
 
 /* A default reply for any (erroneous) occasion. */
 static void default_reply(struct connection *conn,
