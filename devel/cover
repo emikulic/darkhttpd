@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Coverage and unit tests!
+# Build a coverage-enabled darkhttpd, run unit tests and calculate coverage.
 #
 cd $(dirname $0)
 DIR=tmp.httpd.tests

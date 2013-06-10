@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# This is run by the "cover" script.
 import unittest
 from test import TestHelper, Conn, parse
 
