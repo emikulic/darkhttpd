@@ -189,8 +189,8 @@ class TestFileGet(TestHelper):
     def tearDown(self):
         os.unlink(self.fn)
 
-    def test_file_get(self):
-        resp = Conn().get(self.url)
+    def get_helper(self, url):
+        resp = Conn().get(url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
@@ -198,6 +198,12 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
         self.assertContains(hdrs["Server"], "darkhttpd/")
         self.assertEquals(body, self.data)
+
+    def test_file_get(self):
+        self.get_helper(self.url)
+
+    def test_file_get_redundant_dots(self):
+        self.get_helper("/././." + self.url)
 
     def test_file_head(self):
         resp = Conn().get(self.url, method="HEAD")
