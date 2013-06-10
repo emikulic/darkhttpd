@@ -9,7 +9,7 @@ Simply run make:
 How to run darkhttpd
 --------------------
 
-Serve /var/www/htdocs on the default port (port 80):
+Serve /var/www/htdocs on the default port (80 if running as root, else 8080):
 	$ ./darkhttpd /var/www/htdocs
 
 Serve ~/public_html on port 8081:
