@@ -1547,7 +1547,7 @@ static int parse_request(struct connection *conn) {
 
 static int file_exists(const char *path) {
     struct stat filestat;
-    if ((stat(path, &filestat) == -1) && (errno = ENOENT))
+    if ((stat(path, &filestat) == -1) && (errno == ENOENT))
         return 0;
     else
         return 1;
