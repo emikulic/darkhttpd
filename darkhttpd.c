@@ -433,7 +433,7 @@ static void appendf(struct apbuf *buf, const char *format, ...) {
 
 /* Make the specified socket non-blocking. */
 static void nonblock_socket(const int sock) {
-    int flags = fcntl(sock, F_GETFL, NULL);
+    int flags = fcntl(sock, F_GETFL);
 
     if (flags == -1)
         err(1, "fcntl(F_GETFL)");
@@ -2319,7 +2319,7 @@ static int lifeline[2] = { -1, -1 };
 static int fd_null = -1;
 
 static void daemonize_start(void) {
-    pid_t f, w;
+    pid_t f;
 
     if (pipe(lifeline) == -1)
         err(1, "pipe(lifeline)");
@@ -2335,6 +2335,7 @@ static void daemonize_start(void) {
         /* parent: wait for child */
         char tmp[1];
         int status;
+        pid_t w;
 
         if (close(lifeline[1]) == -1)
             warn("close lifeline in parent");
@@ -2496,13 +2497,13 @@ int main(int argc, char **argv) {
     }
     if (drop_gid != INVALID_GID) {
         if (setgid(drop_gid) == -1)
-            err(1, "setgid(%d)", drop_gid);
-        printf("set gid to %d\n", drop_gid);
+            err(1, "setgid(%d)", (int)drop_gid);
+        printf("set gid to %d\n", (int)drop_gid);
     }
     if (drop_uid != INVALID_UID) {
         if (setuid(drop_uid) == -1)
-            err(1, "setuid(%d)", drop_uid);
-        printf("set uid to %d\n", drop_uid);
+            err(1, "setuid(%d)", (int)drop_uid);
+        printf("set uid to %d\n", (int)drop_uid);
     }
 
     /* create pidfile */
