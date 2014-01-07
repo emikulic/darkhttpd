@@ -1421,15 +1421,16 @@ static char *parse_field(const struct connection *conn, const char *field) {
  * either part of the range is given.
  */
 static void parse_range_field(struct connection *conn) {
-    size_t bound1, bound2, len;
     char *range;
 
     range = parse_field(conn, "Range: bytes=");
     if (range == NULL)
         return;
-    len = strlen(range);
 
     do {
+        size_t bound1, bound2, len;
+        len = strlen(range);
+
         /* parse number up to hyphen */
         bound1 = 0;
         for (bound2=0;
