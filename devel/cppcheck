@@ -1,0 +1,5 @@
+#!/bin/bash
+# --check-config - to list headers that can't be found.
+cppcheck --report-progress --enable=all -I/usr/include \
+  -I/usr/include/linux -I/usr/lib/gcc/x86_64-linux-gnu/4.8/include \
+  ../darkhttpd.c
