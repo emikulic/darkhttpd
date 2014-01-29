@@ -863,7 +863,8 @@ static void init_sockin(void) {
 static void usage(const char *argv0) {
     printf("usage:\t%s /path/to/wwwroot [flags]\n\n", argv0);
     printf("flags:\t--port number (default: %u, or 80 if running as root)\n"
-    "\t\tSpecifies which port to listen on for connections.\n\n", bindport);
+    "\t\tSpecifies which port to listen on for connections.\n"
+    "\t\tPass 0 to let the system choose any free port for you.\n\n", bindport);
     printf("\t--addr ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
     "\t\twhich one to bind the listening port to.\n\n");
