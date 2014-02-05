@@ -923,7 +923,7 @@ static void parse_commandline(const int argc, char *argv[]) {
 
     if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
         usage(argv[0]); /* no wwwroot given */
-        exit(EXIT_FAILURE);
+        exit(EXIT_SUCCESS);
     }
 
     if (getuid() == 0)
