@@ -275,7 +275,7 @@ static int want_chroot = 0, want_daemon = 0, want_accf = 0,
 static char *server_hdr = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 
-static int running = 1; /* signal handler sets this to false */
+static volatile int running = 1; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -2446,7 +2446,6 @@ static void pidfile_create(void) {
 /* Close all sockets and FILEs and exit. */
 static void stop_running(int sig) {
     running = 0;
-    fprintf(stderr, "\ncaught signal %s, stopping\n", strsignal(sig));
 }
 
 /* Execution starts here. */
