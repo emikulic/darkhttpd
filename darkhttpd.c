@@ -789,11 +789,8 @@ static const char *url_content_type(const char *url) {
  */
 static void init_sockin(void) {
     struct sockaddr_in addrin;
+    socklen_t addrin_len;
     int sockopt;
-    struct sockaddr_in addrout;
-    socklen_t addrout_len;
-
-    addrout_len = sizeof(addrout);
 
     /* create incoming socket */
     sockin = socket(PF_INET, SOCK_STREAM, 0);
@@ -833,12 +830,12 @@ static void init_sockin(void) {
              sizeof(struct sockaddr)) == -1)
         err(1, "bind(port %u)", bindport);
 
-    if (getsockname(sockin, (struct sockaddr *)&addrout,
-                    &addrout_len) == -1)
-        err(1, "getsocketname(sockin)");
+    addrin_len = sizeof(addrin);
+    if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
+        err(1, "getsockname()");
 
     printf("listening on: http://%s:%u/\n",
-        inet_ntoa(addrout.sin_addr), addrout.sin_port);
+        inet_ntoa(addrin.sin_addr), ntohs(addrin.sin_port));
 
     /* listen on socket */
     if (listen(sockin, max_connections) == -1)
