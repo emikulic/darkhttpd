@@ -233,6 +233,7 @@ struct forward_mapping {
 
 static struct forward_mapping *forward_map = NULL;
 static size_t forward_map_size = 0;
+static const char *forward_all_url = NULL;
 
 struct mime_mapping {
     char *extension, *mimetype;
@@ -1019,6 +1020,11 @@ static void parse_commandline(const int argc, char *argv[]) {
             url = argv[i];
             add_forward_mapping(host, url);
         }
+        else if (strcmp(argv[i], "--forward-all") == 0) {
+            if (++i >= argc)
+                errx(1, "missing url after --forward-all");
+            forward_all_url = argv[i];
+        }
         else if (strcmp(argv[i], "--no-server-id") == 0) {
             want_server_id = 0;
         }
@@ -1752,6 +1758,7 @@ static void process_get(struct connection *conn) {
     char *decoded_url, *target, *if_mod_since;
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
+    const char *forward_to = NULL;
     struct stat filestat;
 
     /* work out path of file being requested */
@@ -1774,15 +1781,20 @@ static void process_get(struct connection *conn) {
                 printf("host=\"%s\"\n", host);
             for (i = 0; i < forward_map_size; i++) {
                 if (strcasecmp(forward_map[i].host, host) == 0) {
-                    redirect(conn, "%s%s",
-                             forward_map[i].target_url, decoded_url);
-                    free(host);
-                    free(decoded_url);
-                    return;
+                    forward_to = forward_map[i].target_url;
+                    break;
                 }
             }
             free(host);
         }
+    }
+    if (!forward_to) {
+        forward_to = forward_all_url;
+    }
+    if (forward_to) {
+        redirect(conn, "%s%s", forward_to, decoded_url);
+        free(decoded_url);
+        return;
     }
 
     /* does it end in a slash? serve up url/index_name */

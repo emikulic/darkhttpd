@@ -49,9 +49,15 @@ Web forward (301) requests for some hosts:
 	$ ./darkhttpd /var/www/htdocs --forward example.com http://www.example.com \
 		--forward secure.example.com https://www.example.com/secure
 
+Web forward (301) requests for all hosts:
+  $ ./darkhttpd /var/www/htdocs --forward example.com http://www.example.com \
+    --forward-all http://catchall.example.com
+
 Commandline options can be combined:
 	$ ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
 
 To see a full list of commandline options,
 run darkhttpd without any arguments:
 	$ ./darkhttpd
+
+vim:set ts=2 sw=2 et tw=80:

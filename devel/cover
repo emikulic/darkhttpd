@@ -31,7 +31,7 @@ python test.py
 kill $PID
 wait $PID
 
-echo "===> run forwarding tests"
+echo "===> run --forward tests"
 ./a.out $DIR --port $PORT \
   --forward example.com http://www.example.com \
   --forward secure.example.com https://www.example.com/secure >/dev/null &
@@ -41,7 +41,17 @@ python test_forward.py
 kill $PID
 wait $PID
 
-echo "===> run no-server-id tests"
+echo "===> run --forward-all tests"
+./a.out $DIR --port $PORT \
+  --forward example.com http://www.example.com \
+  --forward-all http://catchall.example.com >/dev/null &
+PID=$!
+kill -0 $PID || exit 1
+python test_forward_all.py
+kill $PID
+wait $PID
+
+echo "===> run --no-server-id tests"
 ./a.out $DIR --port $PORT --no-server-id >/dev/null &
 PID=$!
 kill -0 $PID || exit 1
