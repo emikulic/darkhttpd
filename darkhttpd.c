@@ -91,6 +91,12 @@ static const int debug = 1;
 # endif
 #endif
 
+#if defined(__GNUC__) || defined(__INTEL_COMPILER)
+# define unused __attribute__((__unused__))
+#else
+# define unused
+#endif
+
 /* [->] borrowed from FreeBSD's src/sys/sys/systm.h,v 1.276.2.7.4.1 */
 #ifndef CTASSERT                /* Allow lint to override */
 # define CTASSERT(x)             _CTASSERT(x, __LINE__)
@@ -2462,7 +2468,7 @@ static void pidfile_create(void) {
 /* [<-] end of pidfile helpers. */
 
 /* Close all sockets and FILEs and exit. */
-static void stop_running(int sig) {
+static void stop_running(int sig unused) {
     running = 0;
 }
 
