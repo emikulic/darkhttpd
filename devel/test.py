@@ -202,6 +202,9 @@ class TestFileGet(TestHelper):
     def test_file_get(self):
         self.get_helper(self.url)
 
+    def test_file_get_urldecode(self):
+        self.get_helper(''.join(['%%%02x' % ord(x) for x in self.url]))
+
     def test_file_get_redundant_dots(self):
         self.get_helper("/././." + self.url)
 
