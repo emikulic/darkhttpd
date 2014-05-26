@@ -2176,7 +2176,7 @@ static ssize_t send_from_file(const int s, const int fd,
         return -1;
     }
     else if ((size_t)numread != amount) {
-        fprintf(stderr, "read %d bytes, expecting %u bytes on fd %d\n",
+        fprintf(stderr, "read %zd bytes, expecting %zu bytes on fd %d\n",
             numread, amount, fd);
         return -1;
     }
