@@ -205,6 +205,12 @@ class TestFileGet(TestHelper):
     def test_file_get_redundant_dots(self):
         self.get_helper("/././." + self.url)
 
+    def test_file_get_question(self):
+        self.get_helper(self.url + "?")
+
+    def test_file_get_question_query(self):
+        self.get_helper(self.url + "?action=Submit")
+
     def test_file_head(self):
         resp = Conn().get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)

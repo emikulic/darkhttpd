@@ -27,6 +27,7 @@ test(const char *input, const char *expected)
 }
 
 static char const *tests[] = {
+    "", NULL,
     "/", "/",
     "/.", "/",
     "/./", "/",
@@ -48,6 +49,11 @@ static char const *tests[] = {
     "/a/b/../../../c", NULL,
     /* don't forget consolidate_slashes */
     "//a///b////c/////", "/a/b/c/",
+    /* strip query params */
+    "/?a=b", "/",
+    "/index.html?", "/index.html",
+    "/index.html?a", "/index.html",
+    "/index.html?a=b", "/index.html",
     NULL
 };
 

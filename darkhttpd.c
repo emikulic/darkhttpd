@@ -488,8 +488,9 @@ static void consolidate_slashes(char *s) {
     s[left] = '\0';
 }
 
-/* Resolve /./ and /../ in a URL, in-place.  Returns NULL if the URL is
- * invalid/unsafe, or the original buffer if successful.
+/* Resolve /./ and /../ in a URL, in-place.  Also strip out query params.
+ * Returns NULL if the URL is invalid/unsafe, or the original buffer if
+ * successful.
  */
 static char *make_safe_url(char *url) {
     struct {
@@ -500,9 +501,17 @@ static char *make_safe_url(char *url) {
     size_t urllen, i, j, pos;
     int ends_in_slash;
 
-    assert(url != NULL);
+    /* strip query params */
+    for (pos=0; url[pos] != '\0'; pos++) {
+        if (url[pos] == '?') {
+            url[pos] = '\0';
+            break;
+        }
+    }
+
     if (url[0] != '/')
         return NULL;
+
     consolidate_slashes(url);
     urllen = strlen(url);
     if (urllen > 0)
