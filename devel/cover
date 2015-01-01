@@ -21,6 +21,8 @@ fi
 mkdir $DIR || exit 1
 mkdir $DIR/forbidden || exit 1
 chmod 0 $DIR/forbidden || exit 1
+mkdir $DIR/unreadable || exit 1
+chmod 0100 $DIR/unreadable || exit 1
 rm -f darkhttpd.gcda darkhttpd.log
 
 echo "===> test_make_safe_uri"
