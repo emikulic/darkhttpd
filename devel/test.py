@@ -54,10 +54,16 @@ def parse(resp):
     return (status, hdrs, body)
 
 class TestHelper(unittest.TestCase):
+    def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}, method="GET"):
+        self.curr_url = url
+        self.curr_conn = Conn()
+        return self.curr_conn.get(url, http_ver, endl, req_hdrs, method)
+
     def assertContains(self, body, *strings):
         for s in strings:
             self.assertTrue(s in body,
-                            msg="expected %s in %s"%(repr(s), repr(body)))
+                    msg="\nExpected: %s\nIn response: %s" % (
+                        repr(s), repr(body)))
 
     def assertIsIndex(self, body, path):
         self.assertContains(body,
@@ -94,7 +100,7 @@ class TestHelper(unittest.TestCase):
 
     def drive_range(self, range_in, range_out, len_out, data_out,
             status_out = "206 Partial Content"):
-        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes="+range_in})
+        resp = self.get(self.url, req_hdrs = {"Range": "bytes="+range_in})
         status, hdrs, body = parse(resp)
         self.assertContains(status, status_out)
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
@@ -111,7 +117,7 @@ class TestDirList(TestHelper):
         os.unlink(self.fn)
 
     def test_dirlist_escape(self):
-        resp = Conn().get("/")
+        resp = self.get("/")
         status, hdrs, body = parse(resp)
         self.assertEquals(ord("#"), 0x23)
         self.assertContains(body, "escape%23this", "12345")
@@ -126,7 +132,7 @@ def makeCase(name, url, hdr_checker=None, body_checker=None,
              req_hdrs={"User-Agent": "test.py"},
              http_ver=None, endl="\n"):
     def do_test(self):
-        resp = Conn().get(url, http_ver, endl, req_hdrs)
+        resp = self.get(url, http_ver, endl, req_hdrs)
         if http_ver is None:
             status = ""
             hdrs = {}
@@ -194,7 +200,7 @@ class TestDirRedirect(TestHelper):
         os.rmdir(self.fn)
 
     def test_dir_redirect(self):
-        resp = Conn().get(self.url)
+        resp = self.get(self.url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "301 Moved Permanently")
         self.assertEquals(hdrs["Location"], self.url+"/") # trailing slash
@@ -212,7 +218,7 @@ class TestFileGet(TestHelper):
         os.unlink(self.fn)
 
     def get_helper(self, url):
-        resp = Conn().get(url)
+        resp = self.get(url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
@@ -237,7 +243,7 @@ class TestFileGet(TestHelper):
         self.get_helper(self.url + "?action=Submit")
 
     def test_file_head(self):
-        resp = Conn().get(self.url, method="HEAD")
+        resp = self.get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
@@ -245,11 +251,11 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
 
     def test_if_modified_since(self):
-        resp1 = Conn().get(self.url, method="HEAD")
+        resp1 = self.get(self.url, method="HEAD")
         status, hdrs, body = parse(resp1)
         lastmod = hdrs["Last-Modified"]
 
-        resp2 = Conn().get(self.url, method="GET", req_hdrs =
+        resp2 = self.get(self.url, method="GET", req_hdrs =
             {"If-Modified-Since": lastmod })
         status, hdrs, body = parse(resp2)
         self.assertContains(status, "304 Not Modified")
@@ -272,7 +278,7 @@ class TestFileGet(TestHelper):
         1, self.data[-1])
 
     def test_range_single_bad(self):
-        resp = Conn().get(self.url, req_hdrs = {"Range":
+        resp = self.get(self.url, req_hdrs = {"Range":
             "bytes=%d-%d"%(self.datalen, self.datalen)})
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
@@ -303,13 +309,13 @@ class TestFileGet(TestHelper):
             self.datalen, self.data)
 
     def test_range_bad_start(self):
-        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=%d-"%(
+        resp = self.get(self.url, req_hdrs = {"Range": "bytes=%d-"%(
             self.datalen*2)})
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
 
     def test_range_backwards(self):
-        resp = Conn().get(self.url, req_hdrs = {"Range": "bytes=20-10"})
+        resp = self.get(self.url, req_hdrs = {"Range": "bytes=20-10"})
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
 
@@ -358,7 +364,7 @@ class TestLargeFile2G(TestHelper):
             self.data[data_start:data_end])
 
     def test_largefile_head(self):
-        resp = Conn().get(self.url, method="HEAD")
+        resp = self.get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
         self.assertEquals(hdrs["Accept-Ranges"], "bytes")
