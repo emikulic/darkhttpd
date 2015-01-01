@@ -747,15 +747,6 @@ static char *read_line(FILE *fp) {
     return buf;
 }
 
-/* Removes the ending newline in a string, if there is one. */
-static void chomp(char *str) {
-    size_t len = strlen(str);
-    if (len == 0)
-        return;
-    if (str[len - 1] == '\n')
-        str[len - 1] = '\0';
-}
-
 /* ---------------------------------------------------------------------------
  * Adds contents of specified file to mime_map list.
  */
@@ -766,7 +757,6 @@ static void parse_extension_map_file(const char *filename) {
     if (fp == NULL)
         err(1, "fopen(\"%s\")", filename);
     while ((buf = read_line(fp)) != NULL) {
-        chomp(buf);
         parse_mimetype_line(buf);
         free(buf);
     }
