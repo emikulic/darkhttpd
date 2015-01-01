@@ -19,6 +19,8 @@ if [ -e $DIR ]; then
 	rm -rf $DIR || exit 1
 fi
 mkdir $DIR || exit 1
+mkdir $DIR/forbidden || exit 1
+chmod 0 $DIR/forbidden || exit 1
 rm -f darkhttpd.gcda darkhttpd.log
 
 echo "===> test_make_safe_uri"
@@ -32,7 +34,7 @@ echo "===> run usage statement"
 ./a.out >/dev/null
 
 echo "===> run tests against a basic instance (generates darkhttpd.gcda)"
-./a.out $DIR --port $PORT --log darkhttpd.log >/dev/null &
+./a.out $DIR --port $PORT --log cover.out.log >cover.out.stdout 2>cover.out.stderr &
 PID=$!
 kill -0 $PID || exit 1
 python test.py
@@ -83,5 +85,5 @@ wait $PID
 echo "===> generating darkhttpd.c.gcov report"
 gcov darkhttpd
 rm -rf $DIR
-rm -f darkhttpd.gcda darkhttpd.gcno darkhttpd.log a.out
+rm -f darkhttpd.gcda darkhttpd.gcno a.out
 echo done
