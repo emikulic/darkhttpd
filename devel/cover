@@ -71,7 +71,7 @@ echo "===> run mimemap tests"
 echo "test/type1 a1" > $DIR/mimemap
 echo "test/this-gets-replaced  ap2" >> $DIR/mimemap
 echo "# this is a comment" >> $DIR/mimemap
-printf "test/type3\\tapp3\n" >> $DIR/mimemap
+printf "test/type3\\tapp3\r\n" >> $DIR/mimemap
 echo "test/type2  ap2" >> $DIR/mimemap
 ./a.out $DIR --port $PORT --mimetypes $DIR/mimemap >/dev/null &
 PID=$!
