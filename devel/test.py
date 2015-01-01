@@ -9,6 +9,16 @@ import random
 
 WWWROOT = "tmp.httpd.tests"
 
+def between(s, start, end):
+    assert start in s, s
+    p = s.index(start) + len(start)
+    s = s[p:]
+    assert end in s, s
+    p = s.index(end)
+    return s[:p]
+
+assert between("hello world", "hell", "world") == "o "
+
 class Conn:
     def __init__(self):
         self.port = 12346
@@ -39,11 +49,43 @@ class Conn:
                 ret += r
         return ret
 
+    def get_keepalive(self, url, endl="\n", req_hdrs={}, method="GET"):
+        req = method+" "+url+" HTTP/1.1"+endl
+        req_hdrs["User-Agent"] = "test.py"
+        req_hdrs["Connection"] = "keep-alive"
+        for k,v in req_hdrs.items():
+            req += k+": "+v+endl
+        req += endl # end of request
+        self.s.send(req)
+        signal.alarm(1) # don't wait forever
+        ret = ""
+        while True:
+            ret += self.s.recv(65536)
+            if "\r\n\r\n" not in ret:
+                # Don't have headers yet.
+                continue
+            if method == "HEAD":
+                # We're done.
+                break
+            if "Content-Length: " in ret:
+                cl = between(ret, "Content-Length: ", "\r\n")
+                cl = int(cl)
+            else:
+                cl = 0
+            p = ret.index("\r\n\r\n") + 4
+            assert len(ret) - p <= cl, [ret, p, cl]
+            if len(ret) == p + cl:
+                # Complete response.
+                break
+        signal.alarm(0)
+        return ret
+
 def parse(resp):
     """
     Parse response into status line, headers and body.
     """
-    pos = resp.index("\r\n\r\n") # throws exception on failure
+    pos = resp.find("\r\n\r\n")
+    assert pos != -1, 'response is %s' % repr(resp)
     head = resp[:pos]
     body = resp[pos+4:]
     status,head = head.split("\r\n", 1)
@@ -55,7 +97,6 @@ def parse(resp):
 
 class TestHelper(unittest.TestCase):
     def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}, method="GET"):
-        self.curr_url = url
         self.curr_conn = Conn()
         return self.curr_conn.get(url, http_ver, endl, req_hdrs, method)
 
@@ -225,6 +266,7 @@ class TestFileGet(TestHelper):
         self.assertEquals(hdrs["Content-Length"], str(self.datalen))
         self.assertEquals(hdrs["Content-Type"], "image/jpeg")
         self.assertContains(hdrs["Server"], "darkhttpd/")
+        assert body == self.data, [url, resp, status, hdrs, body]
         self.assertEquals(body, self.data)
 
     def test_file_get(self):
@@ -318,6 +360,14 @@ class TestFileGet(TestHelper):
         resp = self.get(self.url, req_hdrs = {"Range": "bytes=20-10"})
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
+
+class TestKeepAlive(TestFileGet):
+    def setUp(self):
+        TestFileGet.setUp(self)
+        self.conn = Conn()
+
+    def get(self, url, endl="\n", req_hdrs={}, method="GET"):
+        return self.conn.get_keepalive(url, endl, req_hdrs, method)
 
 def make_large_file(fn, boundary, data):
     big = 1<<33
