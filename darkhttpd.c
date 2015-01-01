@@ -53,6 +53,7 @@ static const int debug = 1;
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <limits.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -2538,6 +2539,10 @@ int main(int argc, char **argv) {
         wwwroot[0] = '\0'; /* empty string */
     }
     if (drop_gid != INVALID_GID) {
+        gid_t list[1];
+        list[0] = drop_gid;
+        if (setgroups(1, list) == -1)
+            err(1, "setgroups([%d])", (int)drop_gid);
         if (setgid(drop_gid) == -1)
             err(1, "setgid(%d)", (int)drop_gid);
         printf("set gid to %d\n", (int)drop_gid);
