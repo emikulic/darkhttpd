@@ -1,6 +1,6 @@
 /* darkhttpd - a simple, single-threaded, static content webserver.
  * https://unix4lyfe.org/darkhttpd/
- * Copyright (c) 2003-2014 Emil Mikulic <emikulic@gmail.com>
+ * Copyright (c) 2003-2015 Emil Mikulic <emikulic@gmail.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the
@@ -18,8 +18,8 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.10.from.git",
-    copyright[] = "copyright (c) 2003-2014 Emil Mikulic";
+    pkgname[]   = "darkhttpd/1.11.from.git",
+    copyright[] = "copyright (c) 2003-2015 Emil Mikulic";
 
 #ifndef DEBUG
 # define NDEBUG
