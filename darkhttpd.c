@@ -912,15 +912,31 @@ static void usage(const char *argv0) {
 /* Returns 1 if string is a number, 0 otherwise.  Set num to NULL if
  * disinterested in value.
  */
-static int str_to_num(const char *str, int *num) {
+static int str_to_num(const char *str, long long *num) {
     char *endptr;
+    long long n;
 
-    long l = strtol(str, &endptr, 10);
+    errno = 0;
+    n = strtoll(str, &endptr, 10);
     if (*endptr != '\0')
         return 0;
+    if (n == LLONG_MIN && errno == ERANGE)
+        return 0;
+    if (n == LLONG_MAX && errno == ERANGE)
+        return 0;
     if (num != NULL)
-        *num = (int)l;
+        *num = n;
     return 1;
+}
+
+/* Returns a valid number or dies. */
+static long long xstr_to_num(const char *str) {
+    long long ret;
+
+    if (!str_to_num(str, &ret)) {
+        errx(1, "number \"%s\" is invalid", str);
+    }
+    return ret;
 }
 
 static void parse_commandline(const int argc, char *argv[]) {
@@ -947,7 +963,7 @@ static void parse_commandline(const int argc, char *argv[]) {
         if (strcmp(argv[i], "--port") == 0) {
             if (++i >= argc)
                 errx(1, "missing number after --port");
-            bindport = (uint16_t)atoi(argv[i]);
+            bindport = xstr_to_num(argv[i]);
         }
         else if (strcmp(argv[i], "--addr") == 0) {
             if (++i >= argc)
@@ -959,7 +975,7 @@ static void parse_commandline(const int argc, char *argv[]) {
         else if (strcmp(argv[i], "--maxconn") == 0) {
             if (++i >= argc)
                 errx(1, "missing number after --maxconn");
-            max_connections = atoi(argv[i]);
+            max_connections = xstr_to_num(argv[i]);
         }
         else if (strcmp(argv[i], "--log") == 0) {
             if (++i >= argc)
@@ -984,27 +1000,27 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--uid") == 0) {
             struct passwd *p;
-            int num;
             if (++i >= argc)
                 errx(1, "missing uid after --uid");
             p = getpwnam(argv[i]);
-            if ((p == NULL) && (str_to_num(argv[i], &num)))
-                p = getpwuid( (uid_t)num );
-
-            if (p == NULL)
+            if (!p) {
+                p = getpwuid((uid_t)xstr_to_num(argv[i]));
+            }
+            if (!p)
                 errx(1, "no such uid: `%s'", argv[i]);
             drop_uid = p->pw_uid;
         }
         else if (strcmp(argv[i], "--gid") == 0) {
             struct group *g;
-            int num;
             if (++i >= argc)
                 errx(1, "missing gid after --gid");
             g = getgrnam(argv[i]);
-            if ((g == NULL) && (str_to_num(argv[i], &num)))
-                g = getgrgid((gid_t)num);
-            if (g == NULL)
+            if (!g) {
+                g = getgrgid((gid_t)xstr_to_num(argv[i]));
+            }
+            if (!g) {
                 errx(1, "no such gid: `%s'", argv[i]);
+            }
             drop_gid = g->gr_gid;
         }
         else if (strcmp(argv[i], "--pidfile") == 0) {
@@ -2419,7 +2435,8 @@ static void pidfile_remove(void) {
 
 static int pidfile_read(void) {
     char buf[16], *endptr;
-    int fd, i, pid;
+    int fd, i;
+    long long pid;
 
     fd = open(pidfile_name, O_RDONLY);
     if (fd == -1)
@@ -2431,9 +2448,9 @@ static int pidfile_read(void) {
     xclose(fd);
     buf[i] = '\0';
 
-    pid = (int)strtoul(buf, &endptr, 10);
-    if (endptr != &buf[i])
+    if (!str_to_num(buf, &pid)) {
         err(1, "invalid pidfile contents: \"%s\"", buf);
+    }
     return (pid);
 }
 
