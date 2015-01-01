@@ -964,7 +964,7 @@ static void parse_commandline(const int argc, char *argv[]) {
         if (strcmp(argv[i], "--port") == 0) {
             if (++i >= argc)
                 errx(1, "missing number after --port");
-            bindport = xstr_to_num(argv[i]);
+            bindport = (uint16_t)xstr_to_num(argv[i]);
         }
         else if (strcmp(argv[i], "--addr") == 0) {
             if (++i >= argc)
@@ -976,7 +976,7 @@ static void parse_commandline(const int argc, char *argv[]) {
         else if (strcmp(argv[i], "--maxconn") == 0) {
             if (++i >= argc)
                 errx(1, "missing number after --maxconn");
-            max_connections = xstr_to_num(argv[i]);
+            max_connections = (int)xstr_to_num(argv[i]);
         }
         else if (strcmp(argv[i], "--log") == 0) {
             if (++i >= argc)
@@ -2435,7 +2435,7 @@ static void pidfile_remove(void) {
 }
 
 static int pidfile_read(void) {
-    char buf[16], *endptr;
+    char buf[16];
     int fd, i;
     long long pid;
 
@@ -2452,7 +2452,7 @@ static int pidfile_read(void) {
     if (!str_to_num(buf, &pid)) {
         err(1, "invalid pidfile contents: \"%s\"", buf);
     }
-    return (pid);
+    return (int)pid;
 }
 
 static void pidfile_create(void) {
