@@ -525,6 +525,7 @@ static char *make_safe_url(char *url) {
             num_slashes++;
 
     /* make an array for the URL elements */
+    assert(num_slashes > 0);
     chunks = xmalloc(sizeof(*chunks) * num_slashes);
 
     /* split by slashes and build chunks array */
