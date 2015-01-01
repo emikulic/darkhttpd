@@ -13,7 +13,7 @@ if [ ! -e test.py ]; then
 fi
 if [ \( ! -x a.out \) -o \( ../darkhttpd.c -nt a.out \) ]; then
   echo "===> building a.out, darkhttpd.gcno"
-  $CC -g -O2 -fprofile-arcs -ftest-coverage -DDEBUG ../darkhttpd.c || exit 1
+  $CC -g -O2 -fprofile-arcs -ftest-coverage -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
 fi
 if [ -e $DIR ]; then
 	rm -rf $DIR || exit 1

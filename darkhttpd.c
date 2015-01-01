@@ -387,7 +387,9 @@ static unsigned int xasprintf(char **ret, const char *format, ...) {
 /* Append buffer code.  A somewhat efficient string buffer with pool-based
  * reallocation.
  */
-#define APBUF_INIT 4096
+#ifndef APBUF_INIT
+# define APBUF_INIT 4096
+#endif
 #define APBUF_GROW APBUF_INIT
 struct apbuf {
     size_t length, pool;
