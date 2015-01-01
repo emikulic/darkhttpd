@@ -11,4 +11,4 @@ CHECKER=$LLVM/llvm/tools/clang/tools/scan-build/ccc-analyzer
 $LLVM/llvm/tools/clang/tools/scan-build/scan-build \
   -analyze-headers \
   --use-analyzer=$LLVM/install/bin/clang \
-  clang $TARGET
+  clang -DDEBUG $TARGET
