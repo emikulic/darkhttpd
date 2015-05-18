@@ -908,6 +908,9 @@ static void usage(const char *argv0) {
     "\t\tRequests to the host are redirected to the corresponding url.\n"
     "\t\tThe option may be specified multiple times, in which case\n"
     "\t\tthe host is matched in order of appearance.\n\n");
+    printf("\t--forward-all url (default: don't forward)\n"
+    "\t\tWeb forward (301 redirect).\n"
+    "\t\tAll requests are redirected to the corresponding url.\n\n");
     printf("\t--no-server-id\n"
     "\t\tDon't identify the server type in headers\n"
     "\t\tor directory listings.\n");
