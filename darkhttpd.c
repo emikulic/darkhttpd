@@ -272,6 +272,7 @@ static in_addr_t bindaddr = INADDR_ANY;
 static uint16_t bindport = 8080; /* or 80 if running as root */
 static int max_connections = -1;        /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
+static int no_listing = 0;
 
 static int sockin = -1;             /* socket to accept connections from */
 static char *wwwroot = NULL;        /* a path name */
@@ -886,6 +887,8 @@ static void usage(const char *argv0) {
     printf("\t--index filename (default: %s)\n"
     "\t\tDefault file to serve when a directory is requested.\n\n",
         index_name);
+    printf("\t--no-listing\n"
+    "\t\tDo not serve listing if directory is requested.\n\n");
     printf("\t--mimetypes filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n\n");
     printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
@@ -993,6 +996,9 @@ static void parse_commandline(const int argc, char *argv[]) {
             if (++i >= argc)
                 errx(1, "missing filename after --index");
             index_name = argv[i];
+        }
+        else if (strcmp(argv[i], "--no-listing") == 0) {
+            no_listing = 1;
         }
         else if (strcmp(argv[i], "--mimetypes") == 0) {
             if (++i >= argc)
@@ -1827,6 +1833,11 @@ static void process_get(struct connection *conn) {
         xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
         if (!file_exists(target)) {
             free(target);
+            if (no_listing) {
+                default_reply(conn, 404, "Not Found",
+                    "The URL you requested (%s) was not found.", conn->url);
+                return;
+            }
             xasprintf(&target, "%s%s", wwwroot, decoded_url);
             generate_dir_listing(conn, target);
             free(target);
