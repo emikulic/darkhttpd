@@ -1837,6 +1837,7 @@ static void process_get(struct connection *conn) {
         if (!file_exists(target)) {
             free(target);
             if (no_listing) {
+                free(decoded_url);
                 default_reply(conn, 404, "Not Found",
                     "The URL you requested (%s) was not found.", conn->url);
                 return;
