@@ -1461,9 +1461,9 @@ static char *parse_field(const struct connection *conn, const char *field) {
 
     /* find end */
     for (bound2 = bound1;
-         ((conn->request[bound2] != '\r') &&
-          (conn->request[bound2] != '\n') &&
-          (bound2 < conn->request_length));
+         ((bound2 < conn->request_length) &&
+          (conn->request[bound2] != '\r') &&
+          (conn->request[bound2] != '\n'));
          bound2++)
             ;
 
