@@ -314,7 +314,8 @@ static const char *default_extension_map[] = {
     NULL
 };
 
-static const char default_mimetype[] = "application/octet-stream";
+static const char octet_stream[] = "application/octet-stream";
+static const char *default_mimetype = octet_stream;
 
 /* Prototypes. */
 static void poll_recv_request(struct connection *conn);
@@ -891,6 +892,9 @@ static void usage(const char *argv0) {
     "\t\tDo not serve listing if directory is requested.\n\n");
     printf("\t--mimetypes filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n\n");
+    printf("\t--default-mimetype string (optional, default: %s)\n"
+    "\t\tFiles with unknown extensions are served as this mimetype.\n\n",
+        octet_stream);
     printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n\n");
     printf("\t--pidfile filename (default: no pidfile)\n"
@@ -1007,6 +1011,11 @@ static void parse_commandline(const int argc, char *argv[]) {
             if (++i >= argc)
                 errx(1, "missing filename after --mimetypes");
             parse_extension_map_file(argv[i]);
+        }
+        else if (strcmp(argv[i], "--default-mimetype") == 0) {
+            if (++i >= argc)
+                errx(1, "missing string after --default-mimetype");
+            default_mimetype = argv[i];
         }
         else if (strcmp(argv[i], "--uid") == 0) {
             struct passwd *p;

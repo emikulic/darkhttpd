@@ -77,7 +77,9 @@ echo "test/this-gets-replaced  ap2" >> $DIR/mimemap
 echo "# this is a comment" >> $DIR/mimemap
 printf "test/type3\\tapp3\r\n" >> $DIR/mimemap
 echo "test/type2  ap2" >> $DIR/mimemap
-./a.out $DIR --port $PORT --mimetypes $DIR/mimemap >/dev/null &
+./a.out $DIR --port $PORT \
+  --mimetypes $DIR/mimemap \
+  --default-mimetype test/default >/dev/null &
 PID=$!
 kill -0 $PID || exit 1
 python test_mimemap.py
