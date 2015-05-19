@@ -1675,25 +1675,24 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size) {
     }
 }
 
-/* Should this character be urlencoded? (according to RFC1738)
- * Contributed by nf.
+/* Is this an unreserved character according to
+ * https://tools.ietf.org/html/rfc3986#section-2.3
  */
-static int needs_urlencoding(const unsigned char c) {
-    unsigned int i;
-    static const char bad[] = "<>\"%{}|^~[]`\\;:/?@#=&";
-
-    /* Non-US-ASCII characters */
-    if ((c <= 0x1F) || (c >= 0x7F))
-        return 1;
-
-    for (i = 0; i < sizeof(bad) - 1; i++)
-        if (c == bad[i])
+static int is_unreserved(const unsigned char c) {
+    if (c >= 'a' && c <= 'z') return 1;
+    if (c >= 'A' && c <= 'Z') return 1;
+    if (c >= '0' && c <= '9') return 1;
+    switch (c) {
+        case '-':
+        case '.':
+        case '_':
+        case '~':
             return 1;
-
+    }
     return 0;
 }
 
-/* Encode string to be an RFC1738-compliant URL part.
+/* Encode string to be an RFC3986-compliant URL part.
  * Contributed by nf.
  */
 static void urlencode(const char *src, char *dest) {
@@ -1701,7 +1700,7 @@ static void urlencode(const char *src, char *dest) {
     int i, j;
 
     for (i = j = 0; src[i] != '\0'; i++) {
-        if (needs_urlencoding((unsigned char)src[i])) {
+        if (!is_unreserved((unsigned char)src[i])) {
             dest[j++] = '%';
             dest[j++] = hex[(src[i] >> 4) & 0xF];
             dest[j++] = hex[ src[i]       & 0xF];
