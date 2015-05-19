@@ -1838,6 +1838,10 @@ static void process_get(struct connection *conn) {
             free(target);
             if (no_listing) {
                 free(decoded_url);
+                /* Return 404 instead of 403 to make --no-listing
+                 * indistinguishable from the directory not existing.
+                 * i.e.: Don't leak information.
+                 */
                 default_reply(conn, 404, "Not Found",
                     "The URL you requested (%s) was not found.", conn->url);
                 return;

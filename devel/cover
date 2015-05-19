@@ -84,6 +84,14 @@ python test_mimemap.py
 kill $PID
 wait $PID
 
+echo "===> run --no-listing tests"
+./a.out $DIR --port $PORT --no-listing >/dev/null &
+PID=$!
+kill -0 $PID || exit 1
+python test_no_listing.py
+kill $PID
+wait $PID
+
 echo "===> generating darkhttpd.c.gcov report"
 gcov darkhttpd
 rm -rf $DIR
