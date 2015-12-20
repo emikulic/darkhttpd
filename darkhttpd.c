@@ -1864,7 +1864,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
      "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
-     "Content-Type: text/html\r\n"
+     "Content-Type: text/html; charset=UTF-8\r\n"
      "\r\n",
      date, server_hdr, keep_alive(conn), llu(conn->reply_length));
 
