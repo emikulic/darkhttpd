@@ -1733,7 +1733,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     }
 
     listing = make_apbuf();
-    append(listing, "<html>\n<head>\n <title>");
+    append(listing, "<html>\n<head>\n<meta charset=\"utf-8\"/>\n<title>");
     append(listing, conn->url);
     append(listing, "</title>\n</head>\n<body>\n<h1>");
     append(listing, conn->url);
