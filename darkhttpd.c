@@ -2581,7 +2581,7 @@ static void pidfile_create(void) {
         err(1, "ftruncate() failed");
     }
 
-    snprintf(pidstr, sizeof(pidstr), "%u", getpid());
+    snprintf(pidstr, sizeof(pidstr), "%d", (int)getpid());
     if (pwrite(fd, pidstr, strlen(pidstr), 0) != (ssize_t)strlen(pidstr)) {
         error = errno;
         pidfile_remove();
