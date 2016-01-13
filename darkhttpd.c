@@ -279,7 +279,9 @@ static const char *index_name = "index.html";
 static int no_listing = 0;
 
 static int sockin = -1;             /* socket to accept connections from */
+#ifdef HAVE_INET6
 static int inet6 = 0;               /* whether the socket uses inet6 */
+#endif
 static char *wwwroot = NULL;        /* a path name */
 static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
@@ -802,15 +804,16 @@ static const char *url_content_type(const char *url) {
 }
 
 static const char *get_address_text(const void *addr) {
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         static char text_addr[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET6, (struct in6_addr *)addr, text_addr,
+        inet_ntop(AF_INET6, (const struct in6_addr *)addr, text_addr,
                   INET6_ADDRSTRLEN);
         return text_addr;
+    } else
 #endif
-    } else {
-        return inet_ntoa(*(struct in_addr *)addr);
+    {
+        return inet_ntoa(*(const struct in_addr *)addr);
     }
 }
 
@@ -825,16 +828,17 @@ static void init_sockin(void) {
     socklen_t addrin_len;
     int sockopt;
 
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         memset(&addrin6, 0, sizeof(addrin6));
         if (inet_pton(AF_INET6, bindaddr ? bindaddr : "::",
                       &addrin6.sin6_addr) == -1) {
             errx(1, "malformed --addr argument");
         }
         sockin = socket(PF_INET6, SOCK_STREAM, 0);
+    } else
 #endif
-    } else {
+    {
         memset(&addrin, 0, sizeof(addrin));
         addrin.sin_addr.s_addr = bindaddr ? inet_addr(bindaddr) : INADDR_ANY;
         if (addrin.sin_addr.s_addr == (in_addr_t)INADDR_NONE)
@@ -870,8 +874,8 @@ static void init_sockin(void) {
 #endif
 
     /* bind socket */
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         addrin6.sin6_family = AF_INET6;
         addrin6.sin6_port = htons(bindport);
         if (bind(sockin, (struct sockaddr *)&addrin6,
@@ -879,8 +883,9 @@ static void init_sockin(void) {
             err(1, "bind(port %u)", bindport);
 
         addrin_len = sizeof(addrin6);
+    } else
 #endif
-    } else {
+    {
         addrin.sin_family = (u_char)PF_INET;
         addrin.sin_port = htons(bindport);
         if (bind(sockin, (struct sockaddr *)&addrin,
@@ -893,12 +898,13 @@ static void init_sockin(void) {
     if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
         err(1, "getsockname()");
 
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         printf("listening on: http://[%s]:%u/\n",
             get_address_text(&addrin6.sin6_addr), bindport);
+    } else
 #endif
-    } else {
+    {
         printf("listening on: http://%s:%u/\n",
             get_address_text(&addrin.sin_addr), bindport);
     }
@@ -1189,13 +1195,14 @@ static void accept_connection(void) {
     /* allocate and initialise struct connection */
     conn = new_connection();
 
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         sin_size = sizeof(addrin6);
         memset(&addrin6, 0, sin_size);
         conn->socket = accept(sockin, (struct sockaddr *)&addrin6, &sin_size);
+    } else
 #endif
-    } else {
+    {
         sin_size = sizeof(addrin);
         memset(&addrin, 0, sin_size);
         conn->socket = accept(sockin, (struct sockaddr *)&addrin, &sin_size);
@@ -1208,11 +1215,12 @@ static void accept_connection(void) {
 
     conn->state = RECV_REQUEST;
 
-    if (inet6) {
 #ifdef HAVE_INET6
+    if (inet6) {
         conn->client = addrin6.sin6_addr;
+    } else
 #endif
-    } else {
+    {
         *(in_addr_t *)&conn->client = addrin.sin_addr.s_addr;
     }
     LIST_INSERT_HEAD(&connlist, conn, entries);
