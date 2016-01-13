@@ -1393,7 +1393,7 @@ static void default_reply(struct connection *conn,
      "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
-     "Content-Type: text/html\r\n"
+     "Content-Type: text/html; charset=utf-8\r\n"
      "\r\n",
      errcode, errname, date, server_hdr, keep_alive(conn),
      llu(conn->reply_length));
@@ -1432,7 +1432,7 @@ static void redirect(struct connection *conn, const char *format, ...) {
      "Location: %s\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
-     "Content-Type: text/html\r\n"
+     "Content-Type: text/html; charset=utf-8\r\n"
      "\r\n",
      date, server_hdr, where, keep_alive(conn), llu(conn->reply_length));
 
@@ -1787,7 +1787,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
      "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
-     "Content-Type: text/html\r\n"
+     "Content-Type: text/html; charset=utf-8\r\n"
      "\r\n",
      date, server_hdr, keep_alive(conn), llu(conn->reply_length));
 
