@@ -9,5 +9,6 @@ LLVM=$HOME/llvm
 
 $LLVM/install/bin/clang -Weverything -O \
   -Wno-unreachable-code -Wno-padded -Wno-disabled-macro-expansion \
+  -Wno-reserved-id-macro \
   -DDEBUG $TARGET
 rm -f a.out

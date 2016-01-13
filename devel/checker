@@ -6,9 +6,8 @@ TARGET=$(dirname $0)/../darkhttpd.c
 
 # Adjust to suit:
 LLVM=$HOME/llvm
-CHECKER=$LLVM/llvm/tools/clang/tools/scan-build/ccc-analyzer
 
-$LLVM/llvm/tools/clang/tools/scan-build/scan-build \
+$LLVM/llvm/tools/clang/tools/scan-build/bin/scan-build \
   -analyze-headers \
   --use-analyzer=$LLVM/install/bin/clang \
   clang -DDEBUG $TARGET
