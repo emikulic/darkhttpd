@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# This is run by the "cover" script.
+# This is run by the "run-tests" script.
 import unittest
 import os
 from test import WWWROOT, TestHelper, Conn, parse
