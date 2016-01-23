@@ -11,10 +11,12 @@ if [ ! -e test.py ]; then
 	echo "can't find test.py, aborting" >&2
 	exit 1
 fi
-if [ \( ! -x a.out \) -o \( ../darkhttpd.c -nt a.out \) ]; then
-  echo "===> building a.out, darkhttpd.gcno"
-  $CC -g -O2 -fprofile-arcs -ftest-coverage -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
-fi
+echo "===> building without -DDEBUG"
+$CC -O2 ../darkhttpd.c || exit 1
+echo "===> building with -DNO_IPV6"
+$CC -O2 -DNO_IPV6 ../darkhttpd.c || exit 1
+echo "===> building a.out and darkhttpd.gcno for coverage"
+$CC -g -O2 -fprofile-arcs -ftest-coverage -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
 if [ -e $DIR ]; then
 	rm -rf $DIR || exit 1
 fi
