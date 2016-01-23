@@ -2341,7 +2341,7 @@ static void poll_send_reply(struct connection *conn)
     }
     conn->last_active = now;
     if (debug)
-        printf("poll_send_reply(%d) sent %d: %lld+[%lld-%lld] of %lld\n",
+        printf("poll_send_reply(%d) sent %d: %llu+[%llu-%llu] of %llu\n",
                conn->socket, (int)sent, llu(conn->reply_start),
                llu(conn->reply_sent), llu(conn->reply_sent + sent - 1),
                llu(conn->reply_length));
