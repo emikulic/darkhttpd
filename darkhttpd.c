@@ -983,10 +983,12 @@ static void usage(const char *argv0) {
     "\t\tAll requests are redirected to the corresponding url.\n\n");
     printf("\t--no-server-id\n"
     "\t\tDon't identify the server type in headers\n"
-    "\t\tor directory listings.\n");
+    "\t\tor directory listings.\n\n");
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
-    "\t\tListen on IPv6 address.\n");
+    "\t\tListen on IPv6 address.\n\n");
+#else
+    printf("\t(This binary was built without IPv6 support: -DNO_IPV6)\n\n");
 #endif
 }
 
