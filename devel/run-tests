@@ -96,8 +96,9 @@ python test_no_listing.py
 kill $PID
 wait $PID
 
-echo "===> generating darkhttpd.c.gcov report"
+echo "===> generating report"
 gcov darkhttpd
 rm -rf $DIR
 rm -f darkhttpd.gcda darkhttpd.gcno a.out
-echo done
+echo "===> done!"
+echo "===> read the report: less darkhttpd.c.gcov"
