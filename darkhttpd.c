@@ -21,6 +21,12 @@ static const char
     pkgname[]   = "darkhttpd/1.11.from.git",
     copyright[] = "copyright (c) 2003-2016 Emil Mikulic";
 
+/* Possible build options: -DDEBUG -DNO_IPV6 */
+
+#ifndef NO_IPV6
+# define HAVE_INET6
+#endif
+
 #ifndef DEBUG
 # define NDEBUG
 static const int debug = 0;
