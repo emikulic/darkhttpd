@@ -111,9 +111,9 @@ fi
 
 # Check that the code builds with various defines.
 echo "===> building without -DDEBUG"
-$CC -O2 ../darkhttpd.c || exit 1
+$CC -O2 -Wall ../darkhttpd.c || exit 1
 echo "===> building with -DNO_IPV6"
-$CC -O2 -DNO_IPV6 ../darkhttpd.c || exit 1
+$CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
 
 # Do coverage and sanitizers.
 # -fsanitize=undefined produces stderr.
