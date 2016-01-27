@@ -889,6 +889,10 @@ static void init_sockin(void) {
             err(1, "bind(port %u)", bindport);
 
         addrin_len = sizeof(addrin6);
+        if (getsockname(sockin, (struct sockaddr *)&addrin6, &addrin_len) == -1)
+            err(1, "getsockname()");
+        printf("listening on: http://[%s]:%u/\n",
+            get_address_text(&addrin6.sin6_addr), bindport);
     } else
 #endif
     {
@@ -897,20 +901,9 @@ static void init_sockin(void) {
         if (bind(sockin, (struct sockaddr *)&addrin,
                  sizeof(struct sockaddr_in)) == -1)
             err(1, "bind(port %u)", bindport);
-
         addrin_len = sizeof(addrin);
-    }
-
-    if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
-        err(1, "getsockname()");
-
-#ifdef HAVE_INET6
-    if (inet6) {
-        printf("listening on: http://[%s]:%u/\n",
-            get_address_text(&addrin6.sin6_addr), bindport);
-    } else
-#endif
-    {
+        if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
+            err(1, "getsockname()");
         printf("listening on: http://%s:%u/\n",
             get_address_text(&addrin.sin_addr), bindport);
     }
