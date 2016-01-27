@@ -118,10 +118,32 @@ $CC -O2 -DNO_IPV6 ../darkhttpd.c || exit 1
 # Do coverage and sanitizers.
 # -fsanitize=undefined produces stderr.
 # -fsanitize=address produces stderr and crashes.
+# -fsanitize=memory produces stderr and crashes.
+
+# msan first.
+if [[ -z "$CLANG" ]]; then
+  CLANG=~/llvm/install/bin/clang
+fi
+if [[ ! -e "$CLANG" ]]; then
+  echo "***WARNING*** \$CLANG ($CLANG) doesn't exist."
+  echo "Skipping memory sanitizer. Try setting the env var."
+else
+  echo "===> building a.out for msan + ubsan"
+  $CLANG -g -O2 -fsanitize=memory -fsanitize=undefined -DDEBUG -DAPBUF_INIT=1 \
+    ../darkhttpd.c || exit 1
+  (runtests) || {
+    echo "FAILED! stderr was:"
+    echo "---"
+    cat test.out.stderr
+    echo "---"
+    exit 1
+  }
+fi
+
+# asan and coverage next.
 echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"
 $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
   -fsanitize=undefined -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
-
 (runtests) || {
   echo "FAILED! stderr was:"
   echo "---"
@@ -129,7 +151,6 @@ $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
   echo "---"
   exit 1
 }
-
 echo "===> generating report"
 gcov darkhttpd
 rm -rf $DIR
