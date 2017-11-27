@@ -1280,9 +1280,22 @@ static void logencode(const char *src, char *dest) {
     dest[j] = '\0';
 }
 
+/* Format [when] as a CLF date format, stored in the specified buffer.  The same
+ * buffer is returned for convenience.
+ */
+#define CLF_DATE_LEN 29 /* strlen("[10/Oct/2000:13:55:36 -0700]")+1 */
+static char *clf_date(char *dest, const time_t when) {
+    time_t when_copy = when;
+    if (strftime(dest, CLF_DATE_LEN,
+                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0)
+        errx(1, "strftime() failed [%s]", dest);
+    return dest;
+}
+
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
-    char *safe_method, *safe_url, *safe_referer, *safe_user_agent;
+    char *safe_method, *safe_url, *safe_referer, *safe_user_agent,
+    dest[CLF_DATE_LEN];
 
     if (logfile == NULL)
         return;
@@ -1307,9 +1320,9 @@ static void log_connection(const struct connection *conn) {
 
 #define use_safe(x) safe_##x ? safe_##x : ""
 
-    fprintf(logfile, "%lu %s \"%s %s\" %d %llu \"%s\" \"%s\"\n",
-        (unsigned long int)now,
+    fprintf(logfile, "%s - - %s \"%s %s HTTP/1.1\" %d %llu \"%s\" \"%s\"\n",
         get_address_text(&conn->client),
+        clf_date(dest, now),
         use_safe(method),
         use_safe(url),
         conn->http_code,
