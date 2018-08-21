@@ -1575,7 +1575,7 @@ static void parse_range_field(struct connection *conn) {
         /* parse number up to hyphen */
         bound1 = 0;
         for (bound2=0;
-            isdigit((int)range[bound2]) && (bound2 < len);
+            (bound2 < len) && isdigit((int)range[bound2]);
             bound2++)
                 ;
 
@@ -1590,7 +1590,7 @@ static void parse_range_field(struct connection *conn) {
         /* parse number after hyphen */
         bound2++;
         for (bound1=bound2;
-            isdigit((int)range[bound2]) && (bound2 < len);
+            (bound2 < len) && isdigit((int)range[bound2]);
             bound2++)
                 ;
 
