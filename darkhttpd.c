@@ -44,6 +44,7 @@ static const int debug = 1;
 # include <sys/sendfile.h>
 #endif
 
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -2328,7 +2329,7 @@ static void httpd_poll(void) {
     int max_fd, select_ret;
     struct connection *conn, *next;
     int bother_with_timeout = 0;
-    struct timeval timeout;
+    struct timeval timeout, t0, t1;
 
     timeout.tv_sec = idletime;
     timeout.tv_usec = 0;
@@ -2363,9 +2364,11 @@ static void httpd_poll(void) {
 #undef MAX_FD_SET
 
     /* -select- */
-    if (debug)
+    if (debug) {
         printf("select() with max_fd %d timeout %d\n",
                 max_fd, bother_with_timeout ? (int)timeout.tv_sec : 0);
+        gettimeofday(&t0, NULL);
+    }
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
         (bother_with_timeout) ? &timeout : NULL);
     if (select_ret == 0) {
@@ -2378,8 +2381,18 @@ static void httpd_poll(void) {
         else
             err(1, "select() failed");
     }
-    if (debug)
-        printf("select() returned %d\n", select_ret);
+    if (debug) {
+        long long sec, usec;
+        gettimeofday(&t1, NULL);
+        sec = t1.tv_sec - t0.tv_sec;
+        usec = t1.tv_usec - t0.tv_usec;
+        if (usec < 0) {
+            usec += 1000000;
+            sec--;
+        }
+        printf("select() returned %d after %lld.%06lld secs\n",
+                select_ret, sec, usec);
+    }
 
     /* update time */
     now = time(NULL);
