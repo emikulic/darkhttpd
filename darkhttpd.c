@@ -279,8 +279,8 @@ static time_t now;
 
 /* Defaults can be overridden on the command-line */
 static const char *bindaddr;
-static uint16_t bindport = 8080; /* or 80 if running as root */
-static int max_connections = -1;        /* kern.ipc.somaxconn */
+static uint16_t bindport = 8080;    /* or 80 if running as root */
+static int max_connections = -1;    /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 static int no_listing = 0;
 
@@ -296,6 +296,7 @@ static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1;
 static char *server_hdr = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
+static int accepting = 1;           /* set to 0 to stop accept()ing */
 
 static volatile int running = 1; /* signal handler sets this to false */
 
@@ -1136,28 +1137,32 @@ static void accept_connection(void) {
 #endif
     socklen_t sin_size;
     struct connection *conn;
-
-    /* allocate and initialise struct connection */
-    conn = new_connection();
+    int fd;
 
 #ifdef HAVE_INET6
     if (inet6) {
         sin_size = sizeof(addrin6);
         memset(&addrin6, 0, sin_size);
-        conn->socket = accept(sockin, (struct sockaddr *)&addrin6, &sin_size);
+        fd = accept(sockin, (struct sockaddr *)&addrin6, &sin_size);
     } else
 #endif
     {
         sin_size = sizeof(addrin);
         memset(&addrin, 0, sin_size);
-        conn->socket = accept(sockin, (struct sockaddr *)&addrin, &sin_size);
+        fd = accept(sockin, (struct sockaddr *)&addrin, &sin_size);
     }
 
-    if (conn->socket == -1)
-        err(1, "accept()");
+    if (fd == -1) {
+        /* Failed to accept, but try to keep serving existing connections. */
+        if (errno == EMFILE || errno == ENFILE) accepting = 0;
+        warn("accept()");
+        return;
+    }
 
+    /* Allocate and initialize struct connection. */
+    conn = new_connection();
+    conn->socket = fd;
     nonblock_socket(conn->socket);
-
     conn->state = RECV_REQUEST;
 
 #ifdef HAVE_INET6
@@ -1171,8 +1176,10 @@ static void accept_connection(void) {
     LIST_INSERT_HEAD(&connlist, conn, entries);
 
     if (debug)
-        printf("accepted connection from %s:%u\n",
-               inet_ntoa(addrin.sin_addr), ntohs(addrin.sin_port));
+        printf("accepted connection from %s:%u (fd %d)\n",
+               inet_ntoa(addrin.sin_addr),
+               ntohs(addrin.sin_port),
+               conn->socket);
 
     /* Try to read straight away rather than going through another iteration
      * of the select() loop.
@@ -1267,6 +1274,8 @@ static void free_connection(struct connection *conn) {
     if (conn->header != NULL && !conn->header_dont_free) free(conn->header);
     if (conn->reply != NULL && !conn->reply_dont_free) free(conn->reply);
     if (conn->reply_fd != -1) xclose(conn->reply_fd);
+    /* If we ran out of sockets, try to resume accepting. */
+    accepting = 1;
 }
 
 /* Recycle a finished connection for HTTP/1.1 Keep-Alive. */
@@ -2331,7 +2340,7 @@ static void httpd_poll(void) {
     /* set recv/send fd_sets */
 #define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
                                 max_fd = (max_fd<sock) ? sock : max_fd; }
-    MAX_FD_SET(sockin, &recv_set);
+    if (accepting) MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
         poll_check_timeout(conn);
@@ -2667,4 +2676,4 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-/* vim:set tabstop=4 shiftwidth=4 expandtab tw=78: */
+/* vim:set ts=4 sw=4 sts=4 expandtab tw=78: */
