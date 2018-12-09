@@ -1331,7 +1331,7 @@ static void poll_check_timeout(struct connection *conn) {
     if (idletime > 0) { /* optimised away by compiler */
         if (now - conn->last_active >= idletime) {
             if (debug)
-                printf("poll_check_timeout(%d) caused closure\n",
+                printf("poll_check_timeout(%d) closing connection\n",
                        conn->socket);
             conn->conn_close = 1;
             conn->state = DONE;
@@ -2343,7 +2343,6 @@ static void httpd_poll(void) {
     if (accepting) MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
-        poll_check_timeout(conn);
         switch (conn->state) {
         case DONE:
             /* do nothing */
@@ -2364,13 +2363,14 @@ static void httpd_poll(void) {
 #undef MAX_FD_SET
 
     /* -select- */
+    if (debug)
+        printf("select() with max_fd %d timeout %d\n",
+                max_fd, bother_with_timeout ? (int)timeout.tv_sec : 0);
     select_ret = select(max_fd + 1, &recv_set, &send_set, NULL,
         (bother_with_timeout) ? &timeout : NULL);
     if (select_ret == 0) {
         if (!bother_with_timeout)
             errx(1, "select() timed out");
-        else
-            return;
     }
     if (select_ret == -1) {
         if (errno == EINTR)
@@ -2378,6 +2378,8 @@ static void httpd_poll(void) {
         else
             err(1, "select() failed");
     }
+    if (debug)
+        printf("select() returned %d\n", select_ret);
 
     /* update time */
     now = time(NULL);
@@ -2387,6 +2389,7 @@ static void httpd_poll(void) {
         accept_connection();
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
+        poll_check_timeout(conn);
         switch (conn->state) {
         case RECV_REQUEST:
             if (FD_ISSET(conn->socket, &recv_set)) poll_recv_request(conn);
@@ -2405,6 +2408,7 @@ static void httpd_poll(void) {
             break;
         }
 
+        /* Handling SEND_REPLY could have set the state to done. */
         if (conn->state == DONE) {
             /* clean out finished connection */
             if (conn->conn_close) {
