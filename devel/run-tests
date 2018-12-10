@@ -97,6 +97,15 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --timeout tests"
+  ./a.out $DIR --port $PORT --timeout 1 \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python test_timeout.py
+  kill $PID
+  wait $PID
+
   if [[ -s test.out.stderr ]]; then
     echo "FAIL: stderr should have been empty."
     exit 1
