@@ -5,11 +5,16 @@
 cd $(dirname $0)
 declare -r DIR=tmp.httpd.tests
 declare -r PORT=12346
-declare -r CC=gcc
 
 if [ ! -e test.py ]; then
 	echo "fatal: can't find test.py. are you in the right directory?" >&2
 	exit 1
+fi
+if [[ -z "$CC" ]]; then
+  CC="$(which gcc)"
+fi
+if [[ -z "$CLANG" ]]; then
+  CLANG="$(which clang)"
 fi
 
 runtests() {
@@ -121,12 +126,9 @@ $CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
 # -fsanitize=memory produces stderr and crashes.
 
 # msan first.
-if [[ -z "$CLANG" ]]; then
-  CLANG=~/llvm/install/bin/clang
-fi
-if [[ ! -e "$CLANG" ]]; then
-  echo "***WARNING*** \$CLANG ($CLANG) doesn't exist."
-  echo "Skipping memory sanitizer. Try setting the env var."
+if ! $CLANG -v 2>/dev/null; then
+  echo "***WARNING*** Can't find clang."
+  echo "Skipping memory sanitizer. Try setting the \$CLANG env var."
 else
   echo "===> building a.out for msan"
   $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
