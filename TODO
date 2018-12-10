@@ -1,5 +1,4 @@
 - keepalive performance against ab sucks
 - keepalive+TCP_NODELAY hangs!
 - send headers using sendfile syscall - fewer packets
-- make timeout a cmdline arg
 - add test for timeout

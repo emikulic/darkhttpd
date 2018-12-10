@@ -261,11 +261,10 @@ static struct mime_mapping *mime_map = NULL;
 static size_t mime_map_size = 0;
 static size_t longest_ext = 0;
 
-/* If a connection is idle for idletime seconds or more, it gets closed and
- * removed from the connlist.  Set to 0 to remove the timeout
- * functionality.
+/* If a connection is idle for timeout_secs or more, it gets closed and
+ * removed from the connlist.
  */
-static int idletime = 60;
+static int timeout_secs = 30;
 static char *keep_alive_field = NULL;
 
 /* Time is cached in the event loop to avoid making an excessive number of
@@ -923,6 +922,10 @@ static void usage(const char *argv0) {
     printf("\t--no-server-id\n"
     "\t\tDon't identify the server type in headers\n"
     "\t\tor directory listings.\n\n");
+    printf("\t--timeout secs (default: %d)\n"
+    "\t\tIf a connection is idle for more than this many seconds,\n"
+    "\t\tit will be closed. Set to zero to disable timeouts.\n\n",
+    timeout_secs);
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
     "\t\tListen on IPv6 address.\n\n");
@@ -1079,6 +1082,11 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--no-server-id") == 0) {
             want_server_id = 0;
+        }
+        else if (strcmp(argv[i], "--timeout") == 0) {
+            if (++i >= argc)
+                errx(1, "missing number after --timeout");
+            timeout_secs = (int)xstr_to_num(argv[i]);
         }
 #ifdef HAVE_INET6
         else if (strcmp(argv[i], "--ipv6") == 0) {
@@ -1325,12 +1333,12 @@ static void strntoupper(char *str, const size_t length) {
         str[i] = (char)toupper(str[i]);
 }
 
-/* If a connection has been idle for more than idletime seconds, it will be
- * marked as DONE and killed off in httpd_poll()
+/* If a connection has been idle for more than timeout_secs, it will be
+ * marked as DONE and killed off in httpd_poll().
  */
 static void poll_check_timeout(struct connection *conn) {
-    if (idletime > 0) { /* optimised away by compiler */
-        if (now - conn->last_active >= idletime) {
+    if (timeout_secs > 0) {
+        if (now - conn->last_active >= timeout_secs) {
             if (debug)
                 printf("poll_check_timeout(%d) closing connection\n",
                        conn->socket);
@@ -2331,7 +2339,7 @@ static void httpd_poll(void) {
     int bother_with_timeout = 0;
     struct timeval timeout, t0, t1;
 
-    timeout.tv_sec = idletime;
+    timeout.tv_sec = timeout_secs;
     timeout.tv_usec = 0;
 
     FD_ZERO(&recv_set);
@@ -2584,7 +2592,7 @@ int main(int argc, char **argv) {
      * parsing a user-specified file.
      */
     sort_mime_map();
-    xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", idletime);
+    xasprintf(&keep_alive_field, "Keep-Alive: timeout=%d\r\n", timeout_secs);
     if (want_server_id)
         xasprintf(&server_hdr, "Server: %s\r\n", pkgname);
     else
