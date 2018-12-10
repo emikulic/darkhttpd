@@ -128,8 +128,8 @@ if [[ ! -e "$CLANG" ]]; then
   echo "***WARNING*** \$CLANG ($CLANG) doesn't exist."
   echo "Skipping memory sanitizer. Try setting the env var."
 else
-  echo "===> building a.out for msan + ubsan"
-  $CLANG -g -O2 -fsanitize=memory -fsanitize=undefined -DDEBUG -DAPBUF_INIT=1 \
+  echo "===> building a.out for msan"
+  $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
     ../darkhttpd.c || exit 1
   (runtests) || {
     echo "FAILED! stderr was:"
