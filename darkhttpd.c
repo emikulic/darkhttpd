@@ -489,7 +489,7 @@ static char *split_string(const char *src,
     return dest;
 }
 
-/* Resolve /./ and /../ in a URL, in-place.  Also strip out query params.
+/* Resolve /./ and /../ in a URL, in-place.
  * Returns NULL if the URL is invalid/unsafe, or the original buffer if
  * successful.
  */
@@ -502,7 +502,7 @@ static char *make_safe_url(char *const url) {
         return NULL;
 
     /* Fast case: skip until first double-slash or dot-dir. */
-    for ( ; *src && *src != '?'; ++src) {
+    for ( ; *src; ++src) {
         if (*src == '/') {
             if (src[1] == '/')
                 break;
@@ -517,7 +517,7 @@ static char *make_safe_url(char *const url) {
 
     /* Copy to dst, while collapsing multi-slashes and handling dot-dirs. */
     dst = src;
-    while (*src && *src != '?') {
+    while (*src) {
         if (*src != '/')
             *dst++ = *src++;
         else if (*++src == '/')
@@ -1853,11 +1853,15 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
 
 /* Process a GET/HEAD request. */
 static void process_get(struct connection *conn) {
-    char *decoded_url, *target, *if_mod_since;
+    char *decoded_url, *end, *target, *if_mod_since;
     char date[DATE_LEN], lastmod[DATE_LEN];
     const char *mimetype = NULL;
     const char *forward_to = NULL;
     struct stat filestat;
+
+    /* strip out query params */
+    if (end = strchr(conn->url, '?'))
+        *end = '\0';
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->url);
