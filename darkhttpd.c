@@ -310,6 +310,7 @@ static gid_t drop_gid = INVALID_GID;
 static const char *default_extension_map[] = {
     "application/ogg"      " ogg",
     "application/pdf"      " pdf",
+    "application/wasm"     " wasm",
     "application/xml"      " xsl xml",
     "application/xml-dtd"  " dtd",
     "application/xslt+xml" " xslt",
