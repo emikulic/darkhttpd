@@ -1495,8 +1495,8 @@ static void default_reply(struct connection *conn,
      errcode, errname, errname, reason, generated_on(date));
     free(reason);
 
-    const char *auth_header =
-        "WWW-Authenticate: Basic realm=\"User Visible Realm\"";
+    const char auth_header[] =
+        "WWW-Authenticate: Basic realm=\"User Visible Realm\"\r\n";
 
     conn->header_length = xasprintf(&(conn->header),
      "HTTP/1.1 %d %s\r\n"
@@ -1506,7 +1506,7 @@ static void default_reply(struct connection *conn,
      "%s" /* keep-alive */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html; charset=UTF-8\r\n"
-     "%s\r\n"
+     "%s"
      "\r\n",
      errcode, errname, date, server_hdr, keep_alive(conn),
      llu(conn->reply_length),
@@ -2149,7 +2149,7 @@ static void process_request(struct connection *conn) {
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
     }
-    // fail if: (auth_enabled) AND (client supplied invalid credentials)
+    /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
     if (auth_key != NULL &&
             (conn->authorization == NULL ||
              strcmp(conn->authorization, auth_key)))
