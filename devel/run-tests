@@ -155,7 +155,8 @@ fi
 # asan and coverage next.
 echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"
 $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
-  -fsanitize=undefined -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
+  -fsanitize=undefined -fno-omit-frame-pointer -DDEBUG -DAPBUF_INIT=1 \
+  ../darkhttpd.c || exit 1
 (export ASAN_OPTIONS=detect_leaks=1; runtests) || {
   echo "FAILED! stderr was:"
   echo "---"
