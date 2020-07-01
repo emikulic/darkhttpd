@@ -130,6 +130,7 @@ echo "===> building with -DNO_IPV6"
 $CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
 
 # Do coverage and sanitizers.
+# In the case of an error being found:
 # -fsanitize=undefined produces stderr.
 # -fsanitize=address produces stderr and crashes.
 # -fsanitize=memory produces stderr and crashes.
@@ -155,7 +156,7 @@ fi
 echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"
 $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
   -fsanitize=undefined -DDEBUG -DAPBUF_INIT=1 ../darkhttpd.c || exit 1
-(runtests) || {
+(export ASAN_OPTIONS=detect_leaks=1; runtests) || {
   echo "FAILED! stderr was:"
   echo "---"
   cat test.out.stderr
