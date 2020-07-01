@@ -106,6 +106,19 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --auth tests"
+  # Wrong flags:
+  ./a.out . --auth >/dev/null 2>/dev/null
+  ./a.out . --auth missing_colon >/dev/null 2>/dev/null
+  # Correct flags:
+  ./a.out $DIR --port $PORT --auth myuser:mypass \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python test_auth.py
+  kill $PID
+  wait $PID
+
   if [[ -s test.out.stderr ]]; then
     echo "FAIL: stderr should have been empty."
     exit 1
