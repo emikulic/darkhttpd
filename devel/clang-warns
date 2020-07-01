@@ -1,13 +1,12 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Build with clang with all warnings.
 #
 TARGET=$(dirname $0)/../darkhttpd.c
-
-# Adjust to suit:
-LLVM=$HOME/llvm
-
-$LLVM/install/bin/clang -Weverything -O \
+if [[ -z "$CLANG" ]]; then
+  CLANG="$(which clang)"
+fi
+"$CLANG" -Weverything -O \
   -Wno-unreachable-code -Wno-padded -Wno-disabled-macro-expansion \
   -Wno-reserved-id-macro \
   -DDEBUG $TARGET
