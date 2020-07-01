@@ -2370,6 +2370,10 @@ static ssize_t send_from_file(const int s, const int fd,
 static void poll_send_reply(struct connection *conn)
 {
     ssize_t sent;
+    /* off_t can be wider than size_t, avoid overflow in send_len */
+    const size_t max_size_t = ~((size_t)0);
+    off_t send_len = conn->reply_length - conn->reply_sent;
+    if (send_len > max_size_t) send_len = max_size_t;
 
     assert(conn->state == SEND_REPLY);
     assert(!conn->header_only);
@@ -2377,14 +2381,13 @@ static void poll_send_reply(struct connection *conn)
         assert(conn->reply_length >= conn->reply_sent);
         sent = send(conn->socket,
             conn->reply + conn->reply_start + conn->reply_sent,
-            (size_t)(conn->reply_length - conn->reply_sent), 0);
+            (size_t)send_len, 0);
     }
     else {
         errno = 0;
         assert(conn->reply_length >= conn->reply_sent);
         sent = send_from_file(conn->socket, conn->reply_fd,
-            conn->reply_start + conn->reply_sent,
-            (size_t)(conn->reply_length - conn->reply_sent));
+            conn->reply_start + conn->reply_sent, (size_t)send_len);
         if (debug && (sent < 1))
             printf("send_from_file returned %lld (errno=%d %s)\n",
                 (long long)sent, errno, strerror(errno));
