@@ -70,6 +70,12 @@ static const int debug = 1;
 #include <time.h>
 #include <unistd.h>
 
+#if defined(__has_feature)
+# if __has_feature(memory_sanitizer)
+#  include <sanitizer/msan_interface.h>
+# endif
+#endif
+
 #ifdef __sun__
 # ifndef INADDR_NONE
 #  define INADDR_NONE -1
@@ -2371,6 +2377,13 @@ static void httpd_poll(void) {
         }
     }
 #undef MAX_FD_SET
+
+#if defined(__has_feature)
+# if __has_feature(memory_sanitizer)
+    __msan_unpoison(&recv_set, sizeof(recv_set));
+    __msan_unpoison(&send_set, sizeof(send_set));
+# endif
+#endif
 
     /* -select- */
     if (debug) {
