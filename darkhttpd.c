@@ -1860,7 +1860,7 @@ static void process_get(struct connection *conn) {
     struct stat filestat;
 
     /* strip out query params */
-    if (end = strchr(conn->url, '?'))
+    if ((end = strchr(conn->url, '?')) != NULL)
         *end = '\0';
 
     /* work out path of file being requested */
