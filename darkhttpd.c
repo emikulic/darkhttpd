@@ -1238,13 +1238,14 @@ static void log_connection(const struct connection *conn) {
     if (conn->method == NULL)
         return; /* invalid - didn't parse - maybe too long */
 
-#define make_safe(x) \
+#define make_safe(x) do { \
     if (conn->x) { \
         safe_##x = xmalloc(strlen(conn->x)*3 + 1); \
         logencode(conn->x, safe_##x); \
     } else { \
         safe_##x = NULL; \
-    }
+    } \
+} while(0)
 
     make_safe(method);
     make_safe(url);
@@ -1265,7 +1266,7 @@ static void log_connection(const struct connection *conn) {
         );
     fflush(logfile);
 
-#define free_safe(x) if (safe_##x) free(safe_##x);
+#define free_safe(x) if (safe_##x) free(safe_##x)
 
     free_safe(method);
     free_safe(url);
@@ -2354,8 +2355,9 @@ static void httpd_poll(void) {
     max_fd = 0;
 
     /* set recv/send fd_sets */
-#define MAX_FD_SET(sock, fdset) { FD_SET(sock,fdset); \
-                                max_fd = (max_fd<sock) ? sock : max_fd; }
+#define MAX_FD_SET(sock, fdset) do { FD_SET(sock,fdset); \
+                                max_fd = (max_fd<sock) ? sock : max_fd; } \
+                                while (0)
     if (accepting) MAX_FD_SET(sockin, &recv_set);
 
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
