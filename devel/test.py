@@ -249,14 +249,19 @@ class TestDirRedirect(TestHelper):
 class TestFileGet(TestHelper):
     def setUp(self):
         self.datalen = 2345
-        self.data = "".join(
+        self.data = ''.join(
             [chr(random.randint(0,255)) for _ in xrange(self.datalen)])
-        self.url = "/data.jpeg"
+        self.url = '/data.jpeg'
         self.fn = WWWROOT + self.url
-        open(self.fn, "w").write(self.data)
+        with open(self.fn, "w") as f:
+            f.write(self.data)
+        self.qurl = '/what%3f.jpg'
+        self.qfn = WWWROOT + '/what?.jpg'
+        os.link(self.fn, self.qfn)
 
     def tearDown(self):
         os.unlink(self.fn)
+        os.unlink(self.qfn)
 
     def get_helper(self, url):
         resp = self.get(url)
@@ -278,11 +283,17 @@ class TestFileGet(TestHelper):
     def test_file_get_redundant_dots(self):
         self.get_helper("/././." + self.url)
 
-    def test_file_get_question(self):
+    def test_file_get_with_empty_query(self):
         self.get_helper(self.url + "?")
 
-    def test_file_get_question_query(self):
+    def test_file_get_with_query(self):
         self.get_helper(self.url + "?action=Submit")
+
+    def test_file_get_esc_question(self):
+        self.get_helper(self.qurl)
+
+    def test_file_get_esc_question_with_query(self):
+        self.get_helper(self.qurl + '?hello=world')
 
     def test_file_head(self):
         resp = self.get(self.url, method="HEAD")
