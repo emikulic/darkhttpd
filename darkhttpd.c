@@ -1865,7 +1865,10 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     listing = make_apbuf();
     append(listing, "<html>\n<head>\n <title>");
     append(listing, conn->url);
-    append(listing, "</title>\n</head>\n<body>\n<h1>");
+    append(listing,
+            "</title>\n"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+            "</head>\n<body>\n<h1>");
     append(listing, conn->url);
     append(listing, "</h1>\n<tt><pre>\n");
 
