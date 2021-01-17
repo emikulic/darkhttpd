@@ -2168,7 +2168,7 @@ static void process_request(struct connection *conn) {
             "You sent a request that the server couldn't understand.");
     }
     /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
-    if (auth_key != NULL &&
+    else if (auth_key != NULL &&
             (conn->authorization == NULL ||
              strcmp(conn->authorization, auth_key)))
     {
