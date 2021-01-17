@@ -1,19 +1,18 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # This is run by the "run-tests" script.
 import unittest
 import os
 import random
 import base64
-from test import WWWROOT, TestHelper, Conn, parse
+from test import WWWROOT, TestHelper, Conn, parse, random_bytes
 
 class TestAuth(TestHelper):
     def setUp(self):
         self.datalen = 2345
-        self.data = ''.join(
-            [chr(random.randint(0,255)) for _ in xrange(self.datalen)])
+        self.data = random_bytes(self.datalen)
         self.url = '/data.jpeg'
         self.fn = WWWROOT + self.url
-        with open(self.fn, 'w') as f:
+        with open(self.fn, 'wb') as f:
             f.write(self.data)
 
     def tearDown(self):
@@ -23,20 +22,21 @@ class TestAuth(TestHelper):
         resp = self.get(self.url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, '401 Unauthorized')
-        self.assertEquals(hdrs['WWW-Authenticate'],
+        self.assertEqual(hdrs['WWW-Authenticate'],
             'Basic realm="User Visible Realm"')
 
     def test_with_auth(self):
         resp = self.get(self.url, req_hdrs={
-            'Authorization': 'Basic '+base64.b64encode('myuser:mypass')})
+            'Authorization':
+            'Basic ' + base64.b64encode(b'myuser:mypass').decode('utf-8')})
         status, hdrs, body = parse(resp)
         self.assertContains(status, '200 OK')
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
-        self.assertEquals(hdrs["Content-Length"], str(self.datalen))
-        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Content-Length"], str(self.datalen))
+        self.assertEqual(hdrs["Content-Type"], "image/jpeg")
         self.assertContains(hdrs["Server"], "darkhttpd/")
         assert body == self.data, [url, resp, status, hdrs, body]
-        self.assertEquals(body, self.data)
+        self.assertEqual(body, self.data)
 
 if __name__ == '__main__':
     unittest.main()
