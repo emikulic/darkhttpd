@@ -35,8 +35,18 @@ class TestAuth(TestHelper):
         self.assertEqual(hdrs["Content-Length"], str(self.datalen))
         self.assertEqual(hdrs["Content-Type"], "image/jpeg")
         self.assertContains(hdrs["Server"], "darkhttpd/")
-        assert body == self.data, [url, resp, status, hdrs, body]
+        assert body == self.data, [self.url, resp, status, hdrs, body]
         self.assertEqual(body, self.data)
+
+    def test_wrong_auth(self):
+        resp = self.get(self.url, req_hdrs={
+            'Authorization':
+            'Basic ' + base64.b64encode(b'myuser:wrongpass').decode('utf-8')})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, '401 Unauthorized')
+        self.assertEqual(hdrs['WWW-Authenticate'],
+            'Basic realm="User Visible Realm"')
+        self.assertContains(hdrs['Server'], 'darkhttpd/')
 
 if __name__ == '__main__':
     unittest.main()
