@@ -29,6 +29,9 @@ class Conn:
         self.s.connect(("0.0.0.0", self.port))
         # connect throws socket.error on connection refused
 
+    def close(self):
+        self.s.close()
+
     def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}, method="GET"):
         req = method+" "+url
         if http_ver is not None:
@@ -102,8 +105,10 @@ def parse(resp):
 
 class TestHelper(unittest.TestCase):
     def get(self, url, http_ver="1.0", endl="\n", req_hdrs={}, method="GET"):
-        self.curr_conn = Conn()
-        return self.curr_conn.get(url, http_ver, endl, req_hdrs, method)
+        c = Conn()
+        r = c.get(url, http_ver, endl, req_hdrs, method)
+        c.close()
+        return r
 
     def assertContains(self, body, *strings):
         if type(body) is not bytes:
@@ -151,10 +156,10 @@ class TestHelper(unittest.TestCase):
         resp = self.get(self.url, req_hdrs = {"Range": "bytes="+range_in})
         status, hdrs, body = parse(resp)
         self.assertContains(status, status_out)
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
-        self.assertEquals(hdrs["Content-Range"], "bytes "+range_out)
-        self.assertEquals(hdrs["Content-Length"], str(len_out))
-        self.assertEquals(body, data_out)
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Content-Range"], "bytes "+range_out)
+        self.assertEqual(hdrs["Content-Length"], str(len_out))
+        self.assertEqual(body, data_out)
 
 class TestDirList(TestHelper):
     def setUp(self):
@@ -164,12 +169,11 @@ class TestDirList(TestHelper):
 
     def tearDown(self):
         os.unlink(self.fn)
-        self.curr_conn.s.close()
 
     def test_dirlist_escape(self):
         resp = self.get("/")
         status, hdrs, body = parse(resp)
-        self.assertEquals(ord("#"), 0x23)
+        self.assertEqual(ord("#"), 0x23)
         self.assertContains(body, "escape%28this%29name", "12345")
 
 class TestCases(TestHelper):
@@ -248,13 +252,12 @@ class TestDirRedirect(TestHelper):
 
     def tearDown(self):
         os.rmdir(self.fn)
-        self.curr_conn.s.close()
 
     def test_dir_redirect(self):
         resp = self.get(self.url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "301 Moved Permanently")
-        self.assertEquals(hdrs["Location"], self.url+"/") # trailing slash
+        self.assertEqual(hdrs["Location"], self.url+"/") # trailing slash
 
 class TestFileGet(TestHelper):
     def setUp(self):
@@ -266,6 +269,8 @@ class TestFileGet(TestHelper):
             f.write(self.data)
         self.qurl = '/what%3f.jpg'
         self.qfn = WWWROOT + '/what?.jpg'
+        if os.path.exists(self.qfn):
+            os.unlink(self.qfn)
         os.link(self.fn, self.qfn)
 
     def tearDown(self):
@@ -276,12 +281,12 @@ class TestFileGet(TestHelper):
         resp = self.get(url)
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
-        self.assertEquals(hdrs["Content-Length"], str(self.datalen))
-        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Content-Length"], str(self.datalen))
+        self.assertEqual(hdrs["Content-Type"], "image/jpeg")
         self.assertContains(hdrs["Server"], "darkhttpd/")
         assert body == self.data, [url, resp, status, hdrs, body]
-        self.assertEquals(body, self.data)
+        self.assertEqual(body, self.data)
 
     def test_file_get(self):
         self.get_helper(self.url)
@@ -308,9 +313,9 @@ class TestFileGet(TestHelper):
         resp = self.get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
-        self.assertEquals(hdrs["Content-Length"], str(self.datalen))
-        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Content-Length"], str(self.datalen))
+        self.assertEqual(hdrs["Content-Type"], "image/jpeg")
 
     def test_if_modified_since(self):
         resp1 = self.get(self.url, method="HEAD")
@@ -321,7 +326,7 @@ class TestFileGet(TestHelper):
             {"If-Modified-Since": lastmod })
         status, hdrs, body = parse(resp2)
         self.assertContains(status, "304 Not Modified")
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
         self.assertFalse("Last-Modified" in hdrs)
         self.assertFalse("Content-Length" in hdrs)
         self.assertFalse("Content-Type" in hdrs)
@@ -382,9 +387,15 @@ class TestFileGet(TestHelper):
         self.assertContains(status, "416 Requested Range Not Satisfiable")
 
 class TestKeepAlive(TestFileGet):
+    """
+    Run all of TestFileGet but with a single long-lived connection.
+    """
     def setUp(self):
         TestFileGet.setUp(self)
         self.conn = Conn()
+
+    def tearDown(self):
+        self.conn.close()
 
     def get(self, url, endl="\n", req_hdrs={}, method="GET"):
         return self.conn.get_keepalive(url, endl, req_hdrs, method)
@@ -431,9 +442,9 @@ class TestLargeFile2G(TestHelper):
         resp = self.get(self.url, method="HEAD")
         status, hdrs, body = parse(resp)
         self.assertContains(status, "200 OK")
-        self.assertEquals(hdrs["Accept-Ranges"], "bytes")
-        self.assertEquals(hdrs["Content-Length"], str(self.filesize))
-        self.assertEquals(hdrs["Content-Type"], "image/jpeg")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertEqual(hdrs["Content-Length"], str(self.filesize))
+        self.assertEqual(hdrs["Content-Type"], "image/jpeg")
 
     def test_largefile__3(self): self.drive_start(-3)
     def test_largefile__2(self): self.drive_start(-2)
