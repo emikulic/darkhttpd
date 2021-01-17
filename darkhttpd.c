@@ -1529,6 +1529,9 @@ static void default_reply(struct connection *conn,
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = errcode;
+
+    /* Reset reply_start in case the request set a range. */
+    conn->reply_start = 0;
 }
 
 static void redirect(struct connection *conn, const char *format, ...)
