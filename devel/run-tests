@@ -37,7 +37,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test.py
+  python3 test.py
   kill $PID
   wait $PID
 
@@ -48,7 +48,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_forward.py
+  python3 test_forward.py
   kill $PID
   wait $PID
 
@@ -59,7 +59,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_forward_all.py
+  python3 test_forward_all.py
   kill $PID
   wait $PID
 
@@ -68,7 +68,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_server_id.py
+  python3 test_server_id.py
   kill $PID
   wait $PID
 
@@ -84,7 +84,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_mimemap.py
+  python3 test_mimemap.py
   kill $PID
   wait $PID
 
@@ -93,7 +93,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_no_listing.py
+  python3 test_no_listing.py
   kill $PID
   wait $PID
 
@@ -102,7 +102,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_timeout.py
+  python3 test_timeout.py
   kill $PID
   wait $PID
 
@@ -115,7 +115,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python test_auth.py
+  python3 test_auth.py
   kill $PID
   wait $PID
 

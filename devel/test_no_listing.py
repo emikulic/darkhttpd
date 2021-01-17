@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # This is run by the "run-tests" script.
 import unittest
 from test import TestHelper, Conn, parse

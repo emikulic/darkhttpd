@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # This is run by the "run-tests" script.
 import unittest
 import signal
@@ -14,7 +14,8 @@ class TestTimeout(unittest.TestCase):
         # Expect to get EOF before the alarm fires.
         ret = s.recv(1024)
         signal.alarm(0)
-        self.assertEquals(ret, '')
+        s.close()
+        self.assertEqual(ret, b'')
 
 if __name__ == '__main__':
     unittest.main()
