@@ -67,6 +67,7 @@ static const int debug = 1;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -304,7 +305,7 @@ static char *server_hdr = NULL;
 static char *auth_key = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
-
+static int syslog_enabled = 0;
 static volatile int running = 1; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
@@ -895,6 +896,8 @@ static void usage(const char *argv0) {
     "\t\tSpecifies how many concurrent connections to accept.\n\n");
     printf("\t--log filename (default: stdout)\n"
     "\t\tSpecifies which file to append the request log to.\n\n");
+    printf("\t--syslog\n"
+    "\t\tUse syslog for request log.\n\n");
     printf("\t--chroot (default: don't chroot)\n"
     "\t\tLocks server into wwwroot directory for added security.\n\n");
     printf("\t--daemon (default: don't daemonize)\n"
@@ -1116,6 +1119,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         else if (strcmp(argv[i], "--accf") == 0) {
             want_accf = 1;
         }
+        else if (strcmp(argv[i], "--syslog") == 0) {
+            syslog_enabled = 1;
+        }
         else if (strcmp(argv[i], "--forward") == 0) {
             const char *host, *url;
             if (++i >= argc)
@@ -1319,7 +1325,18 @@ static void log_connection(const struct connection *conn) {
     make_safe(user_agent);
 
 #define use_safe(x) safe_##x ? safe_##x : ""
-
+  if (syslog_enabled) {
+    syslog(LOG_INFO, "%s - - %s \"%s %s HTTP/1.1\" %d %llu \"%s\" \"%s\"\n",
+        get_address_text(&conn->client),
+        clf_date(dest, now),
+        use_safe(method),
+        use_safe(url),
+        conn->http_code,
+        llu(conn->total_sent),
+        use_safe(referer),
+        use_safe(user_agent)
+        );
+  } else {
     fprintf(logfile, "%s - - %s \"%s %s HTTP/1.1\" %d %llu \"%s\" \"%s\"\n",
         get_address_text(&conn->client),
         clf_date(dest, now),
@@ -1331,7 +1348,7 @@ static void log_connection(const struct connection *conn) {
         use_safe(user_agent)
         );
     fflush(logfile);
-
+  }    
 #define free_safe(x) if (safe_##x) free(safe_##x)
 
     free_safe(method);
