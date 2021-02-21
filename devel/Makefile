@@ -8,5 +8,6 @@ clean:
 		test.out.stdout \
 		test.pyc \
 		test_make_safe_uri \
-		a.out darkhttpd.gcda darkhttpd.gcno
-	rm -rf tmp.httpd.tests
+		a.out darkhttpd.gcda darkhttpd.gcno \
+		fuzz_darkhttpd.o fuzz_llvm_make_safe_uri fuzz_socket
+	rm -rf tmp.fuzz tmp.httpd.tests
