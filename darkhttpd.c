@@ -1861,7 +1861,35 @@ static void urlencode(const char *src, char *dest) {
     dest[j] = '\0';
 }
 
-static void generate_dir_listing(struct connection *conn, const char *path) {
+/* Escape < > & ' " into HTML entities. */
+static void append_escaped(struct apbuf *dst, const char *src) {
+    int pos = 0;
+    while (src[pos] != '\0') {
+        switch (src[pos]) {
+            case '<':
+                append(dst, "&lt;");
+                break;
+            case '>':
+                append(dst, "&gt;");
+                break;
+            case '&':
+                append(dst, "&amp;");
+                break;
+            case '\'':
+                append(dst, "&apos;");
+                break;
+            case '"':
+                append(dst, "&quot;");
+                break;
+            default:
+                appendl(dst, src+pos, 1);
+        }
+        pos++;
+    }
+}
+
+static void generate_dir_listing(struct connection *conn, const char *path,
+        const char *decoded_url) {
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
@@ -1883,13 +1911,13 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
     }
 
     listing = make_apbuf();
-    append(listing, "<html>\n<head>\n <title>");
-    append(listing, conn->url);
+    append(listing, "<html>\n<head>\n<title>");
+    append_escaped(listing, decoded_url);
     append(listing,
             "</title>\n"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
             "</head>\n<body>\n<h1>");
-    append(listing, conn->url);
+    append_escaped(listing, decoded_url);
     append(listing, "</h1>\n<tt><pre>\n");
 
     spaces = xmalloc(maxlen);
@@ -1906,7 +1934,7 @@ static void generate_dir_listing(struct connection *conn, const char *path) {
         append(listing, "<a href=\"");
         append(listing, safe_url);
         append(listing, "\">");
-        append(listing, list[i]->name);
+        append_escaped(listing, list[i]->name);
         append(listing, "</a>");
 
         if (list[i]->is_dir)
@@ -2012,7 +2040,7 @@ static void process_get(struct connection *conn) {
                 return;
             }
             xasprintf(&target, "%s%s", wwwroot, decoded_url);
-            generate_dir_listing(conn, target);
+            generate_dir_listing(conn, target, decoded_url);
             free(target);
             free(decoded_url);
             return;
