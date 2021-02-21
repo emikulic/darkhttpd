@@ -1994,7 +1994,7 @@ static void process_get(struct connection *conn) {
     /* make sure it's safe */
     if (make_safe_url(decoded_url) == NULL) {
         default_reply(conn, 400, "Bad Request",
-                      "You requested an invalid URL: %s", conn->url);
+                      "You requested an invalid URL.");
         free(decoded_url);
         return;
     }
@@ -2036,7 +2036,7 @@ static void process_get(struct connection *conn) {
                  * i.e.: Don't leak information.
                  */
                 default_reply(conn, 404, "Not Found",
-                    "The URL you requested (%s) was not found.", conn->url);
+                    "The URL you requested was not found.");
                 return;
             }
             xasprintf(&target, "%s%s", wwwroot, decoded_url);
@@ -2065,14 +2065,14 @@ static void process_get(struct connection *conn) {
         /* open() failed */
         if (errno == EACCES)
             default_reply(conn, 403, "Forbidden",
-                "You don't have permission to access (%s).", conn->url);
+                "You don't have permission to access this URL.");
         else if (errno == ENOENT)
             default_reply(conn, 404, "Not Found",
-                "The URL you requested (%s) was not found.", conn->url);
+                "The URL you requested was not found.");
         else
             default_reply(conn, 500, "Internal Server Error",
-                "The URL you requested (%s) cannot be returned: %s.",
-                conn->url, strerror(errno));
+                "The URL you requested cannot be returned: %s.",
+                strerror(errno));
 
         return;
     }
@@ -2230,19 +2230,9 @@ static void process_request(struct connection *conn) {
         process_get(conn);
         conn->header_only = 1;
     }
-    else if ((strcmp(conn->method, "OPTIONS") == 0) ||
-             (strcmp(conn->method, "POST") == 0) ||
-             (strcmp(conn->method, "PUT") == 0) ||
-             (strcmp(conn->method, "DELETE") == 0) ||
-             (strcmp(conn->method, "TRACE") == 0) ||
-             (strcmp(conn->method, "CONNECT") == 0)) {
-        default_reply(conn, 501, "Not Implemented",
-                      "The method you specified (%s) is not implemented.",
-                      conn->method);
-    }
     else {
-        default_reply(conn, 400, "Bad Request",
-                      "%s is not a valid HTTP/1.1 method.", conn->method);
+        default_reply(conn, 501, "Not Implemented",
+                      "The method you specified is not implemented.");
     }
 
     /* advance state */
