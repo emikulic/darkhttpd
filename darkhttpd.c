@@ -966,8 +966,9 @@ static char *base64_encode(char *str) {
     char *encoded_data = malloc(output_length+1);
     if (encoded_data == NULL) return NULL;
 
-    for (int i = 0, j = 0; i < input_length;) {
-
+    int i;
+    int j;
+    for (i = 0, j = 0; i < input_length;) {
         uint32_t octet_a = i < input_length ? (unsigned char)str[i++] : 0;
         uint32_t octet_b = i < input_length ? (unsigned char)str[i++] : 0;
         uint32_t octet_c = i < input_length ? (unsigned char)str[i++] : 0;
@@ -981,7 +982,7 @@ static char *base64_encode(char *str) {
     }
 
     const int mod_table[] = {0, 2, 1};
-    for (int i = 0; i < mod_table[input_length % 3]; i++)
+    for (i = 0; i < mod_table[input_length % 3]; i++)
         encoded_data[output_length - 1 - i] = '=';
     encoded_data[output_length] = '\0';
 
