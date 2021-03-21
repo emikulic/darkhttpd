@@ -1,10 +1,19 @@
-// Wrapper around make_safe_url() for fuzzing with LLVM.
-// Aborts if the output is deemed safe but contains /../ or /./
+/* Wrapper around make_safe_url() for fuzzing with LLVM.
+ * Aborts if the output is deemed safe but contains /../ or /./
+ */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define main darkhttpd_main
+#include "../darkhttpd.c"
+#undef main
+
+/* This is the code for the older / simpler make_safe_uri.
+ * The new one comes from ../darkhttpd.c included above.
+ */
 
 /* Consolidate slashes in-place by shifting parts of the string over repeated
  * slashes.
@@ -34,7 +43,7 @@ static void consolidate_slashes(char *s) {
  * Returns NULL if the URL is invalid/unsafe, or the original buffer if
  * successful.
  */
-static char *make_safe_url(char *url) {
+static char *make_safe_url_old(char *url) {
   struct {
     char *start;
     size_t len;
@@ -43,6 +52,8 @@ static char *make_safe_url(char *url) {
   size_t urllen, i, j, pos;
   int ends_in_slash;
 
+  /* query params are now stripped in process_get, not in make_safe_url */
+#if 0
   /* strip query params */
   for (pos = 0; url[pos] != '\0'; pos++) {
     if (url[pos] == '?') {
@@ -50,6 +61,7 @@ static char *make_safe_url(char *url) {
       break;
     }
   }
+#endif
 
   if (url[0] != '/') return NULL;
 
@@ -116,61 +128,7 @@ static char *make_safe_url(char *url) {
   return url;
 }
 
-char *make_safe_url_new(char *const url) {
-    char *src = url, *dst;
-    #define ends(c) ((c) == '/' || (c) == '\0')
-
-    /* URLs not starting with a slash are illegal. */
-    if (*src != '/')
-        return NULL;
-
-    /* Fast case: skip until first double-slash or dot-dir. */
-    for ( ; *src && *src != '?'; ++src) {
-        if (*src == '/') {
-            if (src[1] == '/')
-                break;
-            else if (src[1] == '.') {
-                if (ends(src[2]))
-                    break;
-                else if (src[2] == '.' && ends(src[3]))
-                    break;
-            }
-        }
-    }
-
-    /* Copy to dst, while collapsing multi-slashes and handling dot-dirs. */
-    dst = src;
-    while (*src && *src != '?') {
-        if (*src != '/')
-            *dst++ = *src++;
-        else if (*++src == '/')
-            ;
-        else if (*src != '.')
-            *dst++ = '/';
-        else if (ends(src[1]))
-            /* Ignore single-dot component. */
-            ++src;
-        else if (src[1] == '.' && ends(src[2])) {
-            /* Double-dot component. */
-            src += 2;
-            if (dst == url)
-                return NULL; /* Illegal URL */
-            else
-                /* Backtrack to previous slash. */
-                while (*--dst != '/' && dst > url);
-        }
-        else
-            *dst++ = '/';
-    }
-
-    if (dst == url)
-        ++dst;
-    *dst = '\0';
-    return url;
-    #undef ends
-}
-
-char* dup(const uint8_t *data, size_t size) {
+char* sdup(const uint8_t *data, size_t size) {
   char *buf = malloc(size + 1);
   memcpy(buf, data, size);
   buf[size] = 0;
@@ -184,20 +142,23 @@ void check(char* safe) {
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-  char *buf1 = dup(data, size);
-  char *buf2 = dup(data, size);
+  char *buf1 = sdup(data, size);
+  char *buf2 = sdup(data, size);
   // Enable this to make sure the fuzzer is working.
 #if 0
   if (size > 2 && buf1[2] == 'x') __builtin_trap();
 #endif
-  char *safe1 = make_safe_url(buf1);
+  char *safe1 = make_safe_url_old(buf1);
   char *safe2 = make_safe_url(buf2);
   check(safe1);
   check(safe2);
   if (safe1 == NULL) {
     if (safe2 != NULL) __builtin_trap();
   } else {
-    if (strcmp(safe1, safe2) != 0) __builtin_trap();
+    if (strcmp(safe1, safe2) != 0) {
+      printf("ERROR: Mismatch: old [%s] new [%s]\n", safe1, safe2);
+      __builtin_trap();
+    }
   }
   // Don't leak memory.
   free(buf1);
