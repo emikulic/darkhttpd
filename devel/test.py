@@ -236,6 +236,7 @@ def setUpModule():
         ["no leading slash",     "dir/../",         "assertIsInvalid"],
         ["invalid up dir",       "/../",            "assertIsInvalid"],
         ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
+        ["extra slashes 2",      "//.d",            "assertNotFound"],
         ["not found",            "/not_found.txt",  "assertNotFound"],
         ["forbidden",            "/forbidden/x",    "assertForbidden"],
         ["unreadable",           "/unreadable/",    "assertUnreadable"],
