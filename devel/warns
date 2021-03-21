@@ -4,7 +4,7 @@
 #
 TARGET=$(dirname $0)/../darkhttpd.c
 
-gcc -O2 -fstrict-aliasing \
+gcc -std=c90 -O2 -fstrict-aliasing \
   --all-warnings --extra-warnings \
  -DDEBUG $TARGET
 rm -f a.out
