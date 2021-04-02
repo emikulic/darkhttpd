@@ -8,7 +8,7 @@ RUN make darkhttpd-static \
 
 # Just the static binary
 FROM scratch
-WORKDIR /www-root
+WORKDIR /var/www/htdocs
 COPY --from=build /src/darkhttpd-static /darkhttpd
 EXPOSE 80
 ENTRYPOINT ["/darkhttpd"]
