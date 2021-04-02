@@ -1,0 +1,13 @@
+# Build environment
+FROM alpine AS build
+RUN apk add --no-cache build-base
+WORKDIR /src
+COPY . .
+RUN make darkhttpd-static \
+ && strip darkhttpd-static
+
+# Just the static binary
+FROM scratch
+WORKDIR /www-root
+COPY --from=build /src/darkhttpd-static /darkhttpd
+ENTRYPOINT ["/darkhttpd"]
