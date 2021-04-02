@@ -24,6 +24,7 @@ Features:
 * At some point worked on FreeBSD, Linux, OpenBSD, Solaris.
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
+* Small Docker image (<100KB)
 
 Security:
 * Can log accesses, including Referer and User-Agent.
