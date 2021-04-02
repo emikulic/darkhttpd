@@ -10,4 +10,7 @@ RUN make darkhttpd-static \
 FROM scratch
 WORKDIR /www-root
 COPY --from=build /src/darkhttpd-static /darkhttpd
+EXPOSE 80
 ENTRYPOINT ["/darkhttpd"]
+CMD ["."]
+
