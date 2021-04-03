@@ -24,6 +24,7 @@ Features:
 * At some point worked on FreeBSD, Linux, OpenBSD, Solaris.
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
+* Small Docker image (<100KB)
 
 Security:
 * Can log accesses, including Referer and User-Agent.
@@ -140,6 +141,19 @@ run darkhttpd without any arguments:
 
 ```
 ./darkhttpd
+```
+
+## How to run darkhttpd in Docker
+
+First, build the image.
+```
+docker build -t darkhttpd .
+```
+Then run using volumes for the served files and port mapping for access.
+
+For example, the following would serve files from the current user's dev/mywebsite directory on http://localhost:8080/
+```
+docker run -p 8080:80 -v ~/dev/mywebsite:/var/www/htdocs:ro darkhttpd
 ```
 
 Enjoy.
