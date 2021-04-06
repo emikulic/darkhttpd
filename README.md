@@ -5,6 +5,7 @@ https://unix4lyfe.org/darkhttpd/
 When you need a web server in a hurry.
 
 Features:
+
 * Simple to set up:
   * Single binary, no other files, no installation needed.
   * Standalone, doesn't need `inetd` or `ucspi-tcp`.
@@ -27,6 +28,7 @@ Features:
 * Small Docker image (<100KB)
 
 Security:
+
 * Can log accesses, including Referer and User-Agent.
 * Can chroot.
 * Can drop privileges.
@@ -35,6 +37,7 @@ Security:
 * Drops overly long requests.
 
 Limitations:
+
 * Only serves static content - no CGI.
 
 ## How to build darkhttpd
