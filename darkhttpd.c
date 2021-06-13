@@ -2576,19 +2576,14 @@ static void httpd_poll(void) {
         }
 
         /* Handling SEND_REPLY could have set the state to done. */
-        while (conn->state == DONE) {
+        if (conn->state == DONE) {
             /* clean out finished connection */
             if (conn->conn_close) {
                 LIST_REMOVE(conn, entries);
                 free_connection(conn);
                 free(conn);
-                break;
             } else {
                 recycle_connection(conn);
-                /* and go right back to recv_request without going through
-                 * select() again, until state is not DONE
-                 */
-                poll_recv_request(conn);
             }
         }
     }
