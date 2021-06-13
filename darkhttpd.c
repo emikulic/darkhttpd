@@ -2495,7 +2495,7 @@ static void httpd_poll(void) {
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
         switch (conn->state) {
         case DONE:
-            /* do nothing */
+            /* do nothing, no connection should be left in this state */
             break;
 
         case RECV_REQUEST:
@@ -2578,16 +2578,17 @@ static void httpd_poll(void) {
         }
 
         /* Handling SEND_REPLY could have set the state to done. */
-        if (conn->state == DONE) {
+        while (conn->state == DONE) {
             /* clean out finished connection */
             if (conn->conn_close) {
                 LIST_REMOVE(conn, entries);
                 free_connection(conn);
                 free(conn);
+                break;
             } else {
                 recycle_connection(conn);
                 /* and go right back to recv_request without going through
-                 * select() again.
+                 * select() again, until state is not DONE
                  */
                 poll_recv_request(conn);
             }
