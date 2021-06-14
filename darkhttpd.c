@@ -817,13 +817,11 @@ static void init_sockin(void) {
                    &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(SO_REUSEADDR)");
 
-#if 0
     /* disable Nagle since we buffer everything ourselves */
     sockopt = 1;
     if (setsockopt(sockin, IPPROTO_TCP, TCP_NODELAY,
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(TCP_NODELAY)");
-#endif
 
 #ifdef TORTURE
     /* torture: cripple the kernel-side send buffer so we can only squeeze out
@@ -2495,7 +2493,7 @@ static void httpd_poll(void) {
     LIST_FOREACH_SAFE(conn, &connlist, entries, next) {
         switch (conn->state) {
         case DONE:
-            /* do nothing */
+            /* do nothing, no connection should be left in this state */
             break;
 
         case RECV_REQUEST:
@@ -2586,10 +2584,6 @@ static void httpd_poll(void) {
                 free(conn);
             } else {
                 recycle_connection(conn);
-                /* and go right back to recv_request without going through
-                 * select() again.
-                 */
-                poll_recv_request(conn);
             }
         }
     }
