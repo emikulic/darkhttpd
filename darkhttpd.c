@@ -2518,6 +2518,9 @@ static void httpd_poll(void) {
 #endif
 
     /* -select- */
+    if (timeout_secs == 0) {
+        bother_with_timeout = 0;
+    }
     if (debug) {
         printf("select() with max_fd %d timeout %d\n",
                 max_fd, bother_with_timeout ? (int)timeout.tv_sec : 0);
