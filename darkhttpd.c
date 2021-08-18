@@ -1628,6 +1628,49 @@ static char *parse_field(const struct connection *conn, const char *field) {
     return split_string(conn->request, bound1, bound2);
 }
 
+static void redirect_https(struct connection *conn) {
+    char *host, *url;
+
+    /* work out path of file being requested */
+    url = urldecode(conn->url);
+
+    /* make sure it's safe */
+    if (make_safe_url(url) == NULL) {
+        default_reply(conn, 400, "Bad Request",
+                      "You requested an invalid URL.");
+        free(url);
+        return;
+    }
+
+    host = parse_field(conn, "Host: ");
+    if (host == NULL) {
+        default_reply(conn, 400, "Bad Request",
+                "Missing 'Host' header.");
+        free(url);
+        return;
+    }
+
+    redirect(conn, "https://%s%s", host, url);
+    free(host);
+    free(url);
+}
+
+static int is_https_redirect(struct connection *conn) {
+    char *proto = NULL;
+
+    if (forward_to_https == 0)
+        return 0; /* --forward-https was never used */
+
+    proto = parse_field(conn, "X-Forwarded-Proto: ");
+    if (proto == NULL || strcasecmp(proto, "https") == 0) {
+        free(proto);
+        return 0;
+    }
+
+    free(proto);
+    return 1;
+}
+
 /* Parse a Range: field into range_begin and range_end.  Only handles the
  * first range if a list is given.  Sets range_{begin,end}_given to 1 if
  * either part of the range is given.
@@ -2007,22 +2050,6 @@ static void process_get(struct connection *conn) {
         return;
     }
 
-    if (forward_to_https) {
-        char *proto = parse_field(conn, "X-Forwarded-Proto: ");
-        if (proto) {
-            if (strcmp(proto, "http") == 0) {
-                char *host = parse_field(conn, "Host: ");
-                if (host) {
-                    redirect(conn, "https://%s%s", host, decoded_url);
-                    free(host);
-                    free(proto);
-                    return;
-                }
-            }
-            free(proto);
-        }
-    }
-
     /* test the host against web forward options */
     if (forward_map) {
         char *host = parse_field(conn, "Host: ");
@@ -2238,6 +2265,9 @@ static void process_request(struct connection *conn) {
     if (!parse_request(conn)) {
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
+    }
+    else if (is_https_redirect(conn)) {
+        redirect_https(conn);
     }
     /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
     else if (auth_key != NULL &&
