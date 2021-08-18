@@ -260,6 +260,8 @@ static struct forward_mapping *forward_map = NULL;
 static size_t forward_map_size = 0;
 static const char *forward_all_url = NULL;
 
+static int forward_to_https = 0;
+
 struct mime_mapping {
     char *extension, *mimetype;
 };
@@ -939,6 +941,10 @@ static void usage(const char *argv0) {
     timeout_secs);
     printf("\t--auth username:password\n"
     "\t\tEnable basic authentication.\n\n");
+    printf("\t--forward-https\n"
+    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
+    "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
+    "\t\tthat supports SSL.\n\n");
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
     "\t\tListen on IPv6 address.\n\n");
@@ -1151,6 +1157,9 @@ static void parse_commandline(const int argc, char *argv[]) {
             char *key = base64_encode(argv[i]);
             xasprintf(&auth_key, "Basic %s", key);
             free(key);
+        }
+        else if (strcmp(argv[i], "--forward-https") == 0) {
+            forward_to_https = 1;
         }
 #ifdef HAVE_INET6
         else if (strcmp(argv[i], "--ipv6") == 0) {
@@ -1996,6 +2005,22 @@ static void process_get(struct connection *conn) {
                       "You requested an invalid URL.");
         free(decoded_url);
         return;
+    }
+
+    if (forward_to_https) {
+        char *proto = parse_field(conn, "X-Forwarded-Proto: ");
+        if (proto) {
+            if (strcmp(proto, "http") == 0) {
+                char *host = parse_field(conn, "Host: ");
+                if (host) {
+                    redirect(conn, "https://%s%s", host, decoded_url);
+                    free(host);
+                    free(proto);
+                    return;
+                }
+            }
+            free(proto);
+        }
     }
 
     /* test the host against web forward options */
