@@ -119,6 +119,15 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --forward-https tests"
+  ./a.out $DIR --port $PORT --forward-https \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python3 test_forward_https.py
+  kill $PID
+  wait $PID
+
   if [[ -s test.out.stderr ]]; then
     echo "FAIL: stderr should have been empty."
     exit 1
