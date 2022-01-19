@@ -385,6 +385,11 @@ class TestFileGet(TestHelper):
         status, hdrs, body = parse(resp)
         self.assertContains(status, "416 Requested Range Not Satisfiable")
 
+    def test_lowercase_header(self):
+        resp = self.get(self.url, req_hdrs = {"range": "bytes=20-10"})
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "416 Requested Range Not Satisfiable")
+
 class TestKeepAlive(TestFileGet):
     """
     Run all of TestFileGet but with a single long-lived connection.
