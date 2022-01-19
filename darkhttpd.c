@@ -1817,6 +1817,9 @@ struct dlent {
 };
 
 static int dlent_cmp(const void *a, const void *b) {
+    if (strcmp((*((const struct dlent * const *)a))->name, "..") == 0) {
+        return -1;  /* Special-case ".." to come first. */
+    }
     return strcmp((*((const struct dlent * const *)a))->name,
                   (*((const struct dlent * const *)b))->name);
 }
@@ -1843,7 +1846,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     while ((ent = readdir(dir)) != NULL) {
         struct stat s;
 
-        if ((ent->d_name[0] == '.') && (ent->d_name[1] == '\0'))
+        if (strcmp(ent->d_name, ".") == 0)
             continue; /* skip "." */
         assert(strlen(ent->d_name) <= MAXNAMLEN);
         sprintf(currname, "%s%s", path, ent->d_name);

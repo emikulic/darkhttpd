@@ -22,6 +22,7 @@ runtests() {
     rm -rf $DIR || exit 1
   fi
   mkdir $DIR || exit 1
+  mkdir $DIR/\( || exit 1
   mkdir $DIR/forbidden || exit 1
   chmod 0 $DIR/forbidden || exit 1
   mkdir $DIR/unreadable || exit 1
