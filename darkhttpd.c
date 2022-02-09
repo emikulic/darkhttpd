@@ -1987,6 +1987,8 @@ static void generate_dir_listing(struct connection *conn, const char *path,
 
         append(listing, "<a href=\"");
         append(listing, safe_url);
+        if (list[i]->is_dir)
+            append(listing, "/");
         append(listing, "\">");
         append_escaped(listing, list[i]->name);
         append(listing, "</a>");
