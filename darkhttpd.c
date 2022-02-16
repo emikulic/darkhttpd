@@ -293,6 +293,9 @@ static int max_connections = -1;    /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 static int no_listing = 0;
 
+static char *e_404 = "";
+static char *e_500 = "";
+
 static int sockin = -1;             /* socket to accept connections from */
 #ifdef HAVE_INET6
 static int inet6 = 0;               /* whether the socket uses inet6 */
@@ -736,6 +739,20 @@ static void parse_extension_map_file(const char *filename) {
     }
     fclose(fp);
 }
+/**
+ * Read the custom error HTML file
+ */
+static char *readFile(char *filename) {    
+    char* buffer = NULL;
+    FILE *fp = fopen (filename, "rb");
+    if (fp == NULL)
+        err(1, "fopen(\"%s\")", filename);
+    size_t len;
+    ssize_t bytes_read = getdelim( &buffer, &len, '\0', fp);
+    if ( bytes_read != -1) {  
+        return buffer;
+    }
+}
 
 /* Uses the mime_map to determine a Content-Type: for a requested URL.  This
  * bsearch()es mime_map, so make sure it's sorted first.
@@ -945,6 +962,8 @@ static void usage(const char *argv0) {
     "\t\tIf the client requested HTTP, forward to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
     "\t\tthat supports SSL.\n\n");
+    printf("\t--e404 Custom 404 Error\n"
+    "\t\tEnable custom 404 page. Make file named e404.html in the same path of the server executable file\n\n");
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
     "\t\tListen on IPv6 address.\n\n");
@@ -1161,10 +1180,13 @@ static void parse_commandline(const int argc, char *argv[]) {
         else if (strcmp(argv[i], "--forward-https") == 0) {
             forward_to_https = 1;
         }
+        else if (strcmp(argv[i], "--e404") == 0){
+            e_404 = readFile("e404.html");
+        }
 #ifdef HAVE_INET6
         else if (strcmp(argv[i], "--ipv6") == 0) {
             inet6 = 1;
-        }
+        }        
 #endif
         else
             errx(1, "unknown argument `%s'", argv[i]);
@@ -1523,15 +1545,20 @@ static void default_reply(struct connection *conn,
     va_end(va);
 
     /* Only really need to calculate the date once. */
-    rfc1123_date(date, now);
-
-    conn->reply_length = xasprintf(&(conn->reply),
-     "<html><head><title>%d %s</title></head><body>\n"
+    rfc1123_date(date, now);    
+    
+    char *defContent = "<html><head><title>%d %s</title></head><body style=\"background:tomato\">\n"
      "<h1>%s</h1>\n" /* errname */
      "%s\n" /* reason */
      "<hr>\n"
      "%s" /* generated on */
-     "</body></html>\n",
+     "</body></html>\n";
+     if (errcode == 404 && e_404 != NULL){
+        defContent = e_404;
+    }
+
+    conn->reply_length = xasprintf(&(conn->reply),
+     defContent,
      errcode, errname, errname, reason, generated_on(date));
     free(reason);
 
