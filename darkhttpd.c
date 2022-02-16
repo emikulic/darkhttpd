@@ -1553,7 +1553,7 @@ static void default_reply(struct connection *conn,
      "<hr>\n"
      "%s" /* generated on */
      "</body></html>\n";
-     if (errcode == 404 && e_404 != NULL){
+     if (errcode == 404 && e_404 != ""){
         defContent = e_404;
     }
 
