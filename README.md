@@ -139,6 +139,11 @@ Commandline options can be combined:
 ./darkhttpd ~/public_html --port 8080 --addr 127.0.0.1
 ```
 
+To use custom 404 error page, create file named `e404.html` in the root directory where `darkhttpd` executable run and use the following compination:
+```
+./darkhttpd ./ --port 8080 --e404
+```
+
 To see a full list of commandline options,
 run darkhttpd without any arguments:
 
