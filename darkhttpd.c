@@ -1985,7 +1985,11 @@ static void generate_dir_listing(struct connection *conn, const char *path,
 
         urlencode(list[i]->name, safe_url);
 
-        append(listing, "<a href=\"");
+        if (list[i]->is_dir)
+			append(listing, "<a href=\"");
+		else {
+			append(listing, "<a target='_blank' href=\"");
+		}
         append(listing, safe_url);
         if (list[i]->is_dir)
             append(listing, "/");
