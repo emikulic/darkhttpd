@@ -6,6 +6,7 @@ import signal
 import re
 import os
 import random
+import time
 
 WWWROOT = "tmp.httpd.tests"
 
@@ -469,6 +470,24 @@ class TestLargeFile2G(TestHelper):
 
 class TestLargeFile4G(TestLargeFile2G):
     BOUNDARY = 1<<32
+
+class TestLargeMtime(TestHelper):
+    def setUp(self):
+        self.url = '/large_mtime'
+        self.fn = WWWROOT + self.url
+        with open(self.fn, 'wb') as f:
+            f.write(b'x')
+        # A timestamp in the year 10,000
+        t = int(time.mktime((10000,3,14,1,2,3,0,0,-1)))
+        os.utime(self.fn, (t, t))
+
+    def tearDown(self):
+        os.unlink(self.fn)
+
+    def test_file_get(self):
+        resp = self.get(self.url)
+        status, hdrs, body = parse(resp)
+        self.assertContains(status, "200 OK")
 
 if __name__ == '__main__':
     setUpModule()

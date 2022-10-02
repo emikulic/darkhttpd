@@ -1301,8 +1301,9 @@ static void logencode(const char *src, char *dest) {
 static char *clf_date(char *dest, const time_t when) {
     time_t when_copy = when;
     if (strftime(dest, CLF_DATE_LEN,
-                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0)
-        errx(1, "strftime() failed [%s]", dest);
+                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0) {
+        dest[0] = 0;
+    }
     return dest;
 }
 
@@ -1456,8 +1457,9 @@ static void poll_check_timeout(struct connection *conn) {
 static char *rfc1123_date(char *dest, const time_t when) {
     time_t when_copy = when;
     if (strftime(dest, DATE_LEN,
-                 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&when_copy)) == 0)
-        errx(1, "strftime() failed [%s]", dest);
+                 "%a, %d %b %Y %H:%M:%S GMT", gmtime(&when_copy)) == 0) {
+        dest[0] = 0;
+    }
     return dest;
 }
 
