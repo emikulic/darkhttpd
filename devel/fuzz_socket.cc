@@ -6,14 +6,16 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <thread>
 
 extern "C" int darkhttpd(int argc, const char** argv);
 extern "C" volatile int running;
 
 namespace {
-int argc = 4;
-const char* argv[] = {"./a.out", "tmp.fuzz", "--log", "/dev/null"};
+int argc = 6;
+const char* argv[] = {"./a.out", "tmp.fuzz", "--log", "/dev/null",
+  "--port", "8080"};
 std::thread* thr;
 const char* host = "127.0.0.1";
 int port = 8080;
@@ -24,6 +26,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   static bool inited = false;
   if (!inited) {
     thr = new std::thread([]() { darkhttpd(argc, argv); });
+
+    // If PORT is set in the environment, use it as the port number.
+    char* port_str = getenv("PORT");
+    if (port_str) {
+      port = atoi(port_str);
+      argv[argc - 1] = port_str;
+    }
+
     addrin.sin_family = AF_INET;
     addrin.sin_port = htons(port);
     if (inet_aton(host, &addrin.sin_addr) == 0) err(1, "inet_aton");
