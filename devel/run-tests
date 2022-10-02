@@ -158,22 +158,23 @@ $CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
 # -fsanitize=address produces stderr and crashes.
 # -fsanitize=memory produces stderr and crashes.
 
-# msan first.
-if ! $CLANG -v 2>/dev/null; then
-  echo "***WARNING*** Can't find clang."
-  echo "Skipping memory sanitizer. Try setting the \$CLANG env var."
-else
-  echo "===> building a.out for msan"
-  $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
-    ../darkhttpd.c || exit 1
-  (runtests) || {
-    echo "FAILED! stderr was:"
-    echo "---"
-    cat test.out.stderr
-    echo "---"
-    exit 1
-  }
-fi
+# msan disabled due to issues with dlent.
+## # msan first.
+## if ! $CLANG -v 2>/dev/null; then
+##   echo "***WARNING*** Can't find clang."
+##   echo "Skipping memory sanitizer. Try setting the \$CLANG env var."
+## else
+##   echo "===> building a.out for msan"
+##   $CLANG -g -O2 -fsanitize=memory -DDEBUG -DAPBUF_INIT=1 \
+##     ../darkhttpd.c || exit 1
+##   (runtests) || {
+##     echo "FAILED! stderr was:"
+##     echo "---"
+##     cat test.out.stderr
+##     echo "---"
+##     exit 1
+##   }
+## fi
 
 # asan and coverage next.
 echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"
