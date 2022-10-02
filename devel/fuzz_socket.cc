@@ -9,6 +9,7 @@
 #include <thread>
 
 extern "C" int darkhttpd(int argc, const char** argv);
+extern "C" volatile int running;
 
 namespace {
 int argc = 4;
@@ -26,8 +27,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     addrin.sin_family = AF_INET;
     addrin.sin_port = htons(port);
     if (inet_aton(host, &addrin.sin_addr) == 0) err(1, "inet_aton");
+    while (!running) { std::this_thread::yield(); }
     inited = true;
-    sleep(1);
   }
 
   char buf[4096];

@@ -308,7 +308,7 @@ static char *auth_key = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 static int syslog_enabled = 0;
-static volatile int running = 1; /* signal handler sets this to false */
+volatile int running = 0; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -2847,6 +2847,7 @@ int main(int argc, char **argv) {
     if (want_daemon) daemonize_finish();
 
     /* main loop */
+    running = 1;
     while (running) httpd_poll();
 
     /* clean exit */
