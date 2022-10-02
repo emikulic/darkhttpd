@@ -48,6 +48,12 @@ Simply run make:
 make
 ```
 
+If `cc` is not on your `PATH` as an alias to your C compiler, you may need to specify it. For example,
+
+```
+CC=gcc make
+```
+
 ## How to run darkhttpd
 
 Serve /var/www/htdocs on the default port (80 if running as root, else 8080):

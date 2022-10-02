@@ -381,16 +381,6 @@ static char *xstrdup(const char *src) {
     return dest;
 }
 
-#ifdef __sun /* unimpressed by Solaris */
-static int vasprintf(char **strp, const char *fmt, va_list ap) {
-    char tmp;
-    int result = vsnprintf(&tmp, 1, fmt, ap);
-    *strp = xmalloc(result+1);
-    result = vsnprintf(*strp, result+1, fmt, ap);
-    return result;
-}
-#endif
-
 /* vasprintf() that dies if it fails. */
 static unsigned int xvasprintf(char **ret, const char *format, va_list ap)
     __printflike(2,0);

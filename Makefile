@@ -1,6 +1,6 @@
 CC?=cc
 CFLAGS?=-O
-LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl`
+LIBS=`[ \`uname\` = "SunOS" ] && echo -lsocket -lnsl -lsendfile`
 
 all: darkhttpd
 
