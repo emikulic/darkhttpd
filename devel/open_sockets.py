@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Opens sockets until they run out.
-import sys, socket
+import socket
 from time import time
 
 def main():
