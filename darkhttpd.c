@@ -305,6 +305,7 @@ static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;
+static char *custom_hdrs = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 static int syslog_enabled = 0;
@@ -935,6 +936,10 @@ static void usage(const char *argv0) {
     "\t\tIf the client requested HTTP, forward to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
     "\t\tthat supports SSL.\n\n");
+    printf("\t--header\n"
+    "\t\tAdd a custom header to all responses.\n"
+    "\t\tThis option can be specified multiple times, in which case\n"
+    "\t\tthe headers are added in order of appearance.\n\n");
 #ifdef HAVE_INET6
     printf("\t--ipv6\n"
     "\t\tListen on IPv6 address.\n\n");
@@ -1024,6 +1029,8 @@ static void parse_commandline(const int argc, char *argv[]) {
 
     if (getuid() == 0)
         bindport = 80;
+
+    custom_hdrs = strdup("");
 
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
@@ -1150,6 +1157,15 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--forward-https") == 0) {
             forward_to_https = 1;
+        }
+        else if (strcmp(argv[i], "--header") == 0) {
+            if (++i >= argc)
+                errx(1, "missing argument after --header");
+            if (strchr(argv[i], '\n') != NULL || strstr(argv[i], ": ") == NULL)
+                errx(1, "malformed argument after --header");
+            char *old_custom_hdrs = custom_hdrs;
+            xasprintf(&custom_hdrs, "%s%s\r\n", old_custom_hdrs, argv[i]);
+            free(old_custom_hdrs);
         }
 #ifdef HAVE_INET6
         else if (strcmp(argv[i], "--ipv6") == 0) {
@@ -1536,12 +1552,13 @@ static void default_reply(struct connection *conn,
      "%s" /* server */
      "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
+     "%s" /* custom headers */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html; charset=UTF-8\r\n"
      "%s"
      "\r\n",
      errcode, errname, date, server_hdr, keep_alive(conn),
-     llu(conn->reply_length),
+     custom_hdrs, llu(conn->reply_length),
      (auth_key != NULL ? auth_header : ""));
 
     conn->reply_type = REPLY_GENERATED;
@@ -1580,10 +1597,12 @@ static void redirect(struct connection *conn, const char *format, ...) {
      /* "Accept-Ranges: bytes\r\n" - not relevant here */
      "Location: %s\r\n"
      "%s" /* keep-alive */
+     "%s" /* custom headers */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html; charset=UTF-8\r\n"
      "\r\n",
-     date, server_hdr, where, keep_alive(conn), llu(conn->reply_length));
+     date, server_hdr, where, keep_alive(conn),
+     custom_hdrs, llu(conn->reply_length));
 
     free(where);
     conn->reply_type = REPLY_GENERATED;
@@ -2015,10 +2034,12 @@ static void generate_dir_listing(struct connection *conn, const char *path,
      "%s" /* server */
      "Accept-Ranges: bytes\r\n"
      "%s" /* keep-alive */
+     "%s" /* custom headers */
      "Content-Length: %llu\r\n"
      "Content-Type: text/html; charset=UTF-8\r\n"
      "\r\n",
-     date, server_hdr, keep_alive(conn), llu(conn->reply_length));
+     date, server_hdr, keep_alive(conn), custom_hdrs,
+     llu(conn->reply_length));
 
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = 200;
@@ -2158,8 +2179,10 @@ static void process_get(struct connection *conn) {
          "%s" /* server */
          "Accept-Ranges: bytes\r\n"
          "%s" /* keep-alive */
+         "%s" /* custom headers */
          "\r\n",
-         rfc1123_date(date, now), server_hdr, keep_alive(conn));
+         rfc1123_date(date, now), server_hdr, keep_alive(conn),
+         custom_hdrs);
         conn->reply_length = 0;
         conn->reply_type = REPLY_GENERATED;
         conn->header_only = 1;
@@ -2219,6 +2242,7 @@ static void process_get(struct connection *conn) {
             "%s" /* server */
             "Accept-Ranges: bytes\r\n"
             "%s" /* keep-alive */
+            "%s" /* custom headers */
             "Content-Length: %llu\r\n"
             "Content-Range: bytes %llu-%llu/%llu\r\n"
             "Content-Type: %s\r\n"
@@ -2226,6 +2250,7 @@ static void process_get(struct connection *conn) {
             "\r\n"
             ,
             rfc1123_date(date, now), server_hdr, keep_alive(conn),
+            custom_hdrs,
             llu(conn->reply_length), llu(from), llu(to),
             llu(filestat.st_size), mimetype, lastmod
         );
@@ -2243,13 +2268,14 @@ static void process_get(struct connection *conn) {
             "%s" /* server */
             "Accept-Ranges: bytes\r\n"
             "%s" /* keep-alive */
+            "%s" /* custom headers */
             "Content-Length: %llu\r\n"
             "Content-Type: %s\r\n"
             "Last-Modified: %s\r\n"
             "\r\n"
             ,
             rfc1123_date(date, now), server_hdr, keep_alive(conn),
-            llu(conn->reply_length), mimetype, lastmod
+            custom_hdrs, llu(conn->reply_length), mimetype, lastmod
         );
         conn->http_code = 200;
     }
@@ -2880,6 +2906,7 @@ int main(int argc, char **argv) {
         free(wwwroot);
         free(server_hdr);
         free(auth_key);
+        free(custom_hdrs);
     }
 
     /* usage stats */
