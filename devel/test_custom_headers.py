@@ -63,6 +63,22 @@ class TestCustomHeaders(TestHelper):
         assert body == self.data[0:100], [self.url, resp, status, hdrs, body]
         self.assertEqual(body, self.data[0:100])
 
+    def test_custom_header_if_modified_since(self):
+        resp1 = self.get(self.url, method="HEAD")
+        status, hdrs, body = parse(resp1)
+        lastmod = hdrs["Last-Modified"]
+
+        resp2 = self.get(self.url, method="GET", req_hdrs=
+            {"If-Modified-Since": lastmod })
+        status, hdrs, body = parse(resp2)
+        self.assertContains(status, "304 Not Modified")
+        self.assertEqual(hdrs["Accept-Ranges"], "bytes")
+        self.assertFalse("Last-Modified" in hdrs)
+        self.assertFalse("Content-Length" in hdrs)
+        self.assertFalse("Content-Type" in hdrs)
+        self.assertEqual(hdrs["X-Header-A"], "First Value")
+        self.assertEqual(hdrs["X-Header-B"], "Second Value")
+
 if __name__ == '__main__':
     unittest.main()
 
