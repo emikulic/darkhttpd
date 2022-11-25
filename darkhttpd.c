@@ -936,7 +936,7 @@ static void usage(const char *argv0) {
     "\t\tIf the client requested HTTP, forward to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
     "\t\tthat supports SSL.\n\n");
-    printf("\t--header\n"
+    printf("\t--header 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
     "\t\tthe headers are added in order of appearance.\n\n");
