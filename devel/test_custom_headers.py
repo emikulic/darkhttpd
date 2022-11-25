@@ -79,6 +79,16 @@ class TestCustomHeaders(TestHelper):
         self.assertEqual(hdrs["X-Header-A"], "First Value")
         self.assertEqual(hdrs["X-Header-B"], "Second Value")
 
+    def test_custom_header_forward(self):
+        resp = self.get('/', req_hdrs={'Host': 'example.com'})
+        status, hdrs, body = parse(resp)
+        self.assertEqual(hdrs["X-Header-A"], "First Value")
+        self.assertEqual(hdrs["X-Header-B"], "Second Value")
+        self.assertContains(status, "301 Moved Permanently")
+        expect = "http://www.example.com/"
+        self.assertEqual(hdrs["Location"], expect)
+        self.assertContains(body, expect)
+
 if __name__ == '__main__':
     unittest.main()
 
