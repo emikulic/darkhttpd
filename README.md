@@ -19,6 +19,7 @@ Features:
 * Supports If-Modified-Since.
 * Supports Keep-Alive connections.
 * Supports IPv6.
+* Support arbitrary custom response headers.
 * Can serve 301 redirects based on Host header.
 * Uses sendfile() on FreeBSD, Solaris and Linux.
 * Can use acceptfilter on FreeBSD.
@@ -137,6 +138,13 @@ Web forward (301) requests for all hosts:
 ```
 ./darkhttpd /var/www/htdocs --forward example.com http://www.example.com \
   --forward-all http://catchall.example.com
+```
+
+Arbitrary custom response headers (in this case, allow all cross-origin
+requests):
+
+```
+./darkhttpd /var/www/htdocs --header 'Access-Control-Allow-Origin: *'
 ```
 
 Commandline options can be combined:

@@ -120,6 +120,22 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --header tests"
+  # Wrong flags:
+  ./a.out . --header >/dev/null 2>/dev/null
+  ./a.out . --header missing_colon >/dev/null 2>/dev/null
+  ./a.out . --header $'X-Header: Abusive\r\n\r\nBody' >/dev/null 2>/dev/null
+  # Correct flags:
+  ./a.out $DIR --port $PORT \
+    --header 'X-Header-A: First Value' --header 'X-Header-B: Second Value' \
+    --forward example.com http://www.example.com \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  python3 test_custom_headers.py
+  kill $PID
+  wait $PID
+
   echo "===> run --forward-https tests"
   ./a.out $DIR --port $PORT --forward-https \
     >>test.out.stdout 2>>test.out.stderr &
