@@ -153,12 +153,20 @@ runtests() {
 
 # --- main ---
 
-# Unit test.
+# Unit tests.
 echo "===> test_make_safe_uri"
 $CC -g -O2 -fsanitize=address -fsanitize=undefined \
   test_make_safe_uri.c -o test_make_safe_uri || exit 1
 if ./test_make_safe_uri | egrep '^FAIL:'; then
   echo test_make_safe_uri failed >&2
+  exit 1
+fi
+
+echo "===> test_password_equal"
+$CC -g -O2 -fsanitize=address -fsanitize=undefined \
+  test_password_equal.c -o test_password_equal || exit 1
+if ./test_password_equal | egrep '^FAIL:'; then
+  echo test_password_equal failed >&2
   exit 1
 fi
 
