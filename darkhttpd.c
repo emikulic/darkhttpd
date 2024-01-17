@@ -304,7 +304,7 @@ static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1;
 static char *server_hdr = NULL;
-static char *auth_key = NULL;
+static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
@@ -2291,6 +2291,33 @@ static void process_get(struct connection *conn) {
     }
 }
 
+/* Returns 1 if passwords are equal, runtime is proportional to the length of
+ * user_input to avoid leaking the secret's length and contents through timing
+ * information.
+ */
+int password_equal(const char *user_input, const char *secret) {
+    size_t i = 0;
+    size_t j = 0;
+    char out = 0;
+
+    while (1) {
+        /* Out stays zero if the strings are the same. */
+        out |= user_input[i] ^ secret[j];
+
+        /* Stop at end of user_input. */
+        if (user_input[i] == 0) break;
+        i++;
+
+        /* Don't go past end of secret. */
+        if (secret[j] != 0) j++;
+    }
+
+    /* Check length after loop, otherwise early exit would leak length. */
+    out |= (i != j); /* Secret was shorter. */
+    out |= (secret[j] != 0); /* Secret was longer; j is not the end. */
+    return out == 0;
+}
+
 /* Process a request: build the header and reply, advance state. */
 static void process_request(struct connection *conn) {
     num_requests++;
@@ -2305,8 +2332,7 @@ static void process_request(struct connection *conn) {
     /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
     else if (auth_key != NULL &&
             (conn->authorization == NULL ||
-             strcmp(conn->authorization, auth_key)))
-    {
+             !password_equal(conn->authorization, auth_key))) {
         default_reply(conn, 401, "Unauthorized",
             "Access denied due to invalid credentials.");
     }
