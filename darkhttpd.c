@@ -941,7 +941,9 @@ static void usage(const char *argv0) {
     "\t\tit will be closed. Set to zero to disable timeouts.\n\n",
     timeout_secs);
     printf("\t--auth username:password\n"
-    "\t\tEnable basic authentication.\n\n");
+    "\t\tEnable basic authentication. This is *INSECURE*: passwords\n"
+    "\t\tare sent unencrypted over HTTP, plus the password is visible\n"
+    "\t\tin ps(1) to other users on the system.\n\n");
     printf("\t--forward-https\n"
     "\t\tIf the client requested HTTP, forward to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
