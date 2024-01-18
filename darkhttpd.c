@@ -18,7 +18,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.15",
+    pkgname[]   = "darkhttpd/1.15.from.git",
     copyright[] = "copyright (c) 2003-2024 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
