@@ -10,6 +10,9 @@ darkhttpd: darkhttpd.c
 darkhttpd-static: darkhttpd.c
 	$(CC) -static $(CFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
 
+test:
+	$(MAKE) -C devel
+
 clean:
 	rm -f darkhttpd core darkhttpd.core darkhttpd-static darkhttpd-static.core
 
