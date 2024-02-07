@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Build a coverage-enabled darkhttpd, run unit tests and calculate coverage.
 #
@@ -13,8 +13,19 @@ fi
 if [[ -z "$CC" ]]; then
   CC="$(which gcc)"
 fi
+if [[ -z "$CC" ]]; then
+  CC="$(which cc)"
+fi
 if [[ -z "$CLANG" ]]; then
   CLANG="$(which clang)"
+fi
+
+if [[ -z "$ASAN_OPTIONS" ]]; then
+  ASAN_OPTIONS="detect_leaks=1"
+fi
+
+if [[ -z "$PYTHON" ]]; then
+  PYTHON="python3"
 fi
 
 runtests() {
@@ -38,7 +49,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test.py
+  $PYTHON test.py
   kill $PID
   wait $PID
 
@@ -49,7 +60,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_forward.py
+  $PYTHON test_forward.py
   kill $PID
   wait $PID
 
@@ -60,7 +71,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_forward_all.py
+  $PYTHON test_forward_all.py
   kill $PID
   wait $PID
 
@@ -69,7 +80,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_server_id.py
+  $PYTHON test_server_id.py
   kill $PID
   wait $PID
 
@@ -85,7 +96,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_mimemap.py
+  $PYTHON test_mimemap.py
   kill $PID
   wait $PID
 
@@ -94,7 +105,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_no_listing.py
+  $PYTHON test_no_listing.py
   kill $PID
   wait $PID
 
@@ -103,7 +114,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_timeout.py
+  $PYTHON test_timeout.py
   kill $PID
   wait $PID
 
@@ -116,7 +127,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_auth.py
+  $PYTHON test_auth.py
   kill $PID
   wait $PID
 
@@ -132,7 +143,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_custom_headers.py
+  $PYTHON test_custom_headers.py
   kill $PID
   wait $PID
 
@@ -141,7 +152,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  python3 test_forward_https.py
+  $PYTHON test_forward_https.py
   kill $PID
   wait $PID
 
@@ -205,7 +216,7 @@ echo "===> building a.out and darkhttpd.gcno for coverage + asan + ubsan"
 $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
   -fsanitize=undefined -fno-omit-frame-pointer -DDEBUG -DAPBUF_INIT=1 \
   ../darkhttpd.c || exit 1
-(export ASAN_OPTIONS=detect_leaks=1; runtests) || {
+(export ASAN_OPTIONS; runtests) || {
   echo "FAILED! stderr was:"
   echo "---"
   cat test.out.stderr

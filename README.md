@@ -55,6 +55,18 @@ If `cc` is not on your `PATH` as an alias to your C compiler, you may need to sp
 CC=gcc make
 ```
 
+## How to test darkhttpd
+
+```
+make test
+```
+
+If that isn't working for you, and you're on FreeBSD, you may need to run something closer to the following:
+
+```
+ASAN_OPTIONS=" " PYTHON=python3.11 make test
+```
+
 ## How to run darkhttpd
 
 Serve /var/www/htdocs on the default port (80 if running as root, else 8080):
