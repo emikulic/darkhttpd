@@ -794,7 +794,7 @@ static const char *get_address_text(const void *addr) {
     }
 }
 
-/* Initialize the sockin global.  This is the socket that we accept
+/* Initialize the sockin global. This is the socket that we accept
  * connections from.
  */
 static void init_sockin(void) {
@@ -809,7 +809,7 @@ static void init_sockin(void) {
     if (inet6) {
         memset(&addrin6, 0, sizeof(addrin6));
         if (inet_pton(AF_INET6, bindaddr ? bindaddr : "::",
-                      &addrin6.sin6_addr) == -1) {
+                      &addrin6.sin6_addr) != 1) {
             errx(1, "malformed --addr argument");
         }
         sockin = socket(PF_INET6, SOCK_STREAM, 0);
@@ -837,6 +837,18 @@ static void init_sockin(void) {
     if (setsockopt(sockin, IPPROTO_TCP, TCP_NODELAY,
             &sockopt, sizeof(sockopt)) == -1)
         err(1, "setsockopt(TCP_NODELAY)");
+
+#ifdef HAVE_INET6
+    if (inet6) {
+        /* Listen on IPv4 and IPv6 on the same socket.               */
+        /* Only relevant if listening on ::, but behaves normally if */
+        /* listening on a specific address.                          */
+        sockopt = 0;
+        if (setsockopt(sockin, IPPROTO_IPV6, IPV6_V6ONLY,
+                &sockopt, sizeof (sockopt)) < 0)
+            err(1, "setsockopt (IPV6_V6ONLY)");
+    }
+#endif
 
 #ifdef TORTURE
     /* torture: cripple the kernel-side send buffer so we can only squeeze out

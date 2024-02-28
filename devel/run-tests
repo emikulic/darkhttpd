@@ -44,6 +44,20 @@ runtests() {
   # Early exit if we can't even survive usage.
   ./a.out >/dev/null 2>>test.out.stderr || exit 1
 
+  echo "===> run test for binding to bogus address (IPv4)"
+  # Should exit immediately.
+  # Error is "Can't assign requested adddress" on FreeBSD and "Cannot assign requested address" on Linux.
+  ./a.out $DIR --port $PORT --addr 8.8.8.8 2>&1 | grep -F "t assign requested address" > /dev/null || exit 1
+
+  echo "===> run test for binding to bogus address (IPv6)"
+  # Should exit immediately.
+  # Error is "Can't assign requested adddress" on FreeBSD and "Cannot assign requested address" on Linux.
+  ./a.out $DIR --port $PORT --ipv6 --addr ::8888 2>&1 | grep -F "t assign requested address" > /dev/null || exit 1
+
+  echo "===> run test for binding to IPv4 when IPv6 requested"
+  # Should exit immediately.
+  ./a.out $DIR --port $PORT --ipv6 --addr 127.0.0.1 2>&1 | grep -F "malformed --addr argument" > /dev/null || exit 1
+
   echo "===> run tests against a basic instance (generates darkhttpd.gcda)"
   ./a.out $DIR --port $PORT --log test.out.log \
     >>test.out.stdout 2>>test.out.stderr &
