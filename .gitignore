@@ -3,6 +3,8 @@ __pycache__/
 *.gcov
 devel/a.out
 *.gcno
+devel/test.out.log
+devel/test.out.stdout
 devel/test.out.stderr
 devel/test_make_safe_uri
 devel/test_password_equal

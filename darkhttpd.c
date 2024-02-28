@@ -71,6 +71,18 @@ static const int debug = 1;
 #include <time.h>
 #include <unistd.h>
 
+/* This is for non-root chroot support on FreeBSD 14.0+ */
+/* Must set sysctl security.bsd.unprivileged_chroot=1 to allow this. */
+#ifdef __FreeBSD__
+# if __FreeBSD_version >= 1400000
+#  define HAVE_NON_ROOT_CHROOT
+# endif
+#endif
+
+#ifdef HAVE_NON_ROOT_CHROOT
+#include <sys/procctl.h>
+#endif
+
 #if defined(__has_feature)
 # if __has_feature(memory_sanitizer)
 #  include <sanitizer/msan_interface.h>
@@ -2882,6 +2894,14 @@ int main(int argc, char **argv) {
 
     /* security */
     if (want_chroot) {
+        #ifdef HAVE_NON_ROOT_CHROOT
+        /* We run this even as root, which should never be a bad thing. */
+        int arg = PROC_NO_NEW_PRIVS_ENABLE;
+        int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
+        if (error != 0)
+            err(1, "procctl");
+        #endif
+
         tzset(); /* read /etc/localtime before we chroot */
         if (chdir(wwwroot) == -1)
             err(1, "chdir(%s)", wwwroot);
