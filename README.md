@@ -23,6 +23,7 @@ Features:
 * Can serve 301 redirects based on Host header.
 * Uses sendfile() on FreeBSD, Solaris and Linux.
 * Can use acceptfilter on FreeBSD.
+* Can use chroot as non-root on FreeBSD 14+.
 * At some point worked on FreeBSD, Linux, OpenBSD, Solaris.
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
