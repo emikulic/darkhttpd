@@ -2003,8 +2003,16 @@ static void generate_dir_listing(struct connection *conn, const char *path,
 
     listsize = make_sorted_dirlist(path, &list);
     if (listsize == -1) {
-        default_reply(conn, 500, "Internal Server Error",
-                      "Couldn't list directory: %s", strerror(errno));
+        /* opendir() failed */
+        if (errno == EACCES)
+            default_reply(conn, 403, "Forbidden",
+                "You don't have permission to access this URL.");
+        else if (errno == ENOENT)
+            default_reply(conn, 404, "Not Found",
+                "The URL you requested was not found.");
+        else
+            default_reply(conn, 500, "Internal Server Error",
+                "Couldn't list directory: %s", strerror(errno));
         return;
     }
 
