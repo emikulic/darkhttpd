@@ -1895,7 +1895,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
 
         if ((strncmp(path, wwwroot, strlen(path) - 1) == 0) &&
             (strcmp(ent->d_name, "..") == 0))
-                continue; /* skip "..", when in wwwroot */
+            continue; /* skip "..", when in wwwroot */
         if (strcmp(ent->d_name, ".") == 0)
             continue; /* skip "." */
         assert(strlen(ent->d_name) <= MAXNAMLEN);
