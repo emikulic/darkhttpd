@@ -1071,6 +1071,8 @@ static void parse_commandline(const int argc, char *argv[]) {
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
     len = strlen(wwwroot);
+    if (len == 0)
+        errx(1, "wwwroot cannot be NULL");
     if (len > 1)
         if (wwwroot[len - 1] == '/')
             wwwroot[len - 1] = '\0';
