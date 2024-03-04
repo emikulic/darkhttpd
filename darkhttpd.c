@@ -1072,7 +1072,7 @@ static void parse_commandline(const int argc, char *argv[]) {
     /* Strip ending slash. */
     len = strlen(wwwroot);
     if (len == 0)
-        errx(1, "wwwroot cannot be NULL");
+        errx(1, "/path/to/wwwroot cannot be empty");
     if (len > 1)
         if (wwwroot[len - 1] == '/')
             wwwroot[len - 1] = '\0';
