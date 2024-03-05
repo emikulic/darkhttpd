@@ -30,8 +30,8 @@ RUN make darkhttpd \
 FROM scratch
 WORKDIR /var/www/htdocs
 COPY --from=build --chown=0:0 /src/darkhttpd /darkhttpd
-COPY --chown=0:0 passwd /etc/passwd
-COPY --chown=0:0 group /etc/group
+COPY --chown=0:0 docker/passwd /etc/passwd
+COPY --chown=0:0 docker/group /etc/group
 EXPOSE 80
 ENTRYPOINT ["/darkhttpd"]
 CMD [".", "--chroot", "--uid", "nobody", "--gid", "nobody"]
