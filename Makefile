@@ -7,9 +7,6 @@ all: darkhttpd
 darkhttpd: darkhttpd.c
 	$(CC) $(CFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
 
-darkhttpd-static: darkhttpd.c
-	$(CC) -static $(CFLAGS) $(LDFLAGS) $(LIBS) darkhttpd.c -o $@
-
 test:
 	$(MAKE) -C devel
 

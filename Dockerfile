@@ -23,13 +23,13 @@ ENV CFLAGS=" \
   -Wl,-z,relro                            \
   -Wl,-z,noexecstack                      \
 "
-RUN make darkhttpd-static \
- && strip darkhttpd-static
+RUN make darkhttpd \
+ && strip darkhttpd
 
 # Just the static binary
 FROM scratch
 WORKDIR /var/www/htdocs
-COPY --from=build --chown=0:0 /src/darkhttpd-static /darkhttpd
+COPY --from=build --chown=0:0 /src/darkhttpd /darkhttpd
 COPY --chown=0:0 passwd /etc/passwd
 COPY --chown=0:0 group /etc/group
 EXPOSE 80
