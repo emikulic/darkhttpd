@@ -2502,6 +2502,8 @@ static void poll_send_header(struct connection *conn) {
  * <size>.  Use sendfile() if possible since it's zero-copy on some platforms.
  * Returns the number of bytes sent, 0 on closure, -1 if send() failed, -2 if
  * read error.
+ *
+ * TODO: send headers with sendfile(), this will result in fewer packets.
  */
 static ssize_t send_from_file(const int s, const int fd,
         off_t ofs, size_t size) {
