@@ -249,6 +249,7 @@ def setUpModule():
         ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
         ["extra slashes 2",      "//.d",            "assertNotFound"],
         ["not found",            "/not_found.txt",  "assertNotFound"],
+        ["not found dir",        "/not_found/",     "assertNotFound"],
         ["forbidden",            "/forbidden/x",    "assertForbidden"],
         ["unreadable",           "/unreadable/",    "assertForbidden"],
         ]:
