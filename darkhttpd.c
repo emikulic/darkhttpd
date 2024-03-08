@@ -71,6 +71,12 @@ static const int debug = 1;
 #include <time.h>
 #include <unistd.h>
 
+/* The time formatting that we use in directory listings.                    */
+/* An example of the default is 2013-09-09 13:01, which should be compatible */
+/* with xbmc/kodi.                                                           */
+#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %R"
+#define DIR_LIST_MTIME_SIZE 16 + 1 /* How large the buffer will need to be. */
+
 /* This is for non-root chroot support on FreeBSD 14.0+ */
 /* Must set sysctl security.bsd.unprivileged_chroot=1 to allow this. */
 #ifdef __FreeBSD__
@@ -1860,9 +1866,10 @@ static int file_exists(const char *path) {
 }
 
 struct dlent {
-    char *name;
-    int is_dir;
-    off_t size;
+    char *name;            /* The name/path of the entry.                 */
+    int is_dir;            /* If the entry is a directory and not a file. */
+    off_t size;            /* The size of the entry, in bytes.            */
+    struct timespec mtime; /* When the file was last modified.            */
 };
 
 static int dlent_cmp(const void *a, const void *b) {
@@ -1912,6 +1919,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         list[entries]->name = xstrdup(ent->d_name);
         list[entries]->is_dir = S_ISDIR(s.st_mode);
         list[entries]->size = s.st_size;
+        list[entries]->mtime = s.st_mtim;
         entries++;
     }
     closedir(dir);
@@ -2057,7 +2065,14 @@ static void generate_dir_listing(struct connection *conn, const char *path,
             append(listing, "/\n");
         else {
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
-            appendf(listing, "%10llu\n", llu(list[i]->size));
+            append(listing, " ");
+            char buf[DIR_LIST_MTIME_SIZE];
+            strftime(buf,
+                     sizeof buf,
+                     DIR_LIST_MTIME_FORMAT,
+                     localtime(&list[i]->mtime.tv_sec));
+            append(listing, buf);
+            appendf(listing, " %10llu\n", llu(list[i]->size));
         }
     }
 
