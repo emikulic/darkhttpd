@@ -2059,7 +2059,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
                      DIR_LIST_MTIME_FORMAT,
                      localtime(&list[i]->mtime.tv_sec));
             append(listing, buf);
-            appendf(listing, "%10llu\n", llu(list[i]->size));
+            appendf(listing, " %10llu\n", llu(list[i]->size));
         }
     }
 
