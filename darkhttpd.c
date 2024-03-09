@@ -1350,8 +1350,9 @@ static void logencode(const char *src, char *dest) {
 #define CLF_DATE_LEN 29 /* strlen("[10/Oct/2000:13:55:36 -0700]")+1 */
 static char *clf_date(char *dest, const time_t when) {
     time_t when_copy = when;
-    if (strftime(dest, CLF_DATE_LEN,
-                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0) {
+    struct tm tm;
+    localtime_r(&when_copy, &tm);
+    if (strftime(dest, CLF_DATE_LEN, "[%d/%b/%Y:%H:%M:%S %z]", &tm) == 0) {
         dest[0] = 0;
     }
     return dest;
@@ -2067,10 +2068,9 @@ static void generate_dir_listing(struct connection *conn, const char *path,
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
             append(listing, " ");
             char buf[DIR_LIST_MTIME_SIZE];
-            strftime(buf,
-                     sizeof buf,
-                     DIR_LIST_MTIME_FORMAT,
-                     localtime(&list[i]->mtime.tv_sec));
+            struct tm tm;
+            localtime_r(&list[i]->mtime.tv_sec, &tm);
+            strftime(buf, sizeof buf, DIR_LIST_MTIME_FORMAT, &tm);
             append(listing, buf);
             appendf(listing, " %10llu\n", llu(list[i]->size));
         }
