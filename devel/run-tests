@@ -63,7 +63,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test.py
+  $PYTHON test.py || exit 1
   kill $PID
   wait $PID
 
@@ -74,7 +74,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_forward.py
+  $PYTHON test_forward.py || exit 1
   kill $PID
   wait $PID
 
@@ -85,7 +85,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_forward_all.py
+  $PYTHON test_forward_all.py || exit 1
   kill $PID
   wait $PID
 
@@ -94,7 +94,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_server_id.py
+  $PYTHON test_server_id.py || exit 1
   kill $PID
   wait $PID
 
@@ -110,7 +110,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_mimemap.py
+  $PYTHON test_mimemap.py || exit 1
   kill $PID
   wait $PID
 
@@ -119,7 +119,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_no_listing.py
+  $PYTHON test_no_listing.py || exit 1
   kill $PID
   wait $PID
 
@@ -128,7 +128,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_timeout.py
+  $PYTHON test_timeout.py || exit 1
   kill $PID
   wait $PID
 
@@ -141,7 +141,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_auth.py
+  $PYTHON test_auth.py || exit 1
   kill $PID
   wait $PID
 
@@ -157,7 +157,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_custom_headers.py
+  $PYTHON test_custom_headers.py || exit 1
   kill $PID
   wait $PID
 
@@ -166,7 +166,7 @@ runtests() {
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
-  $PYTHON test_forward_https.py
+  $PYTHON test_forward_https.py || exit 1
   kill $PID
   wait $PID
 
@@ -239,6 +239,8 @@ $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
 }
 echo "===> generating report"
 gcov darkhttpd
+chmod 755 $DIR/forbidden
+chmod 755 $DIR/unreadable
 rm -rf $DIR
 rm -f darkhttpd.gcda darkhttpd.gcno a.out
 echo "===> PASSED!"
