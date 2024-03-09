@@ -5,6 +5,7 @@
 cd $(dirname $0)
 declare -r DIR=tmp.httpd.tests
 declare -r PORT=12346
+declare -r ADDR=127.0.0.1
 
 if [ ! -e test.py ]; then
 	echo "fatal: can't find test.py. are you in the right directory?" >&2
@@ -59,7 +60,7 @@ runtests() {
   ./a.out $DIR --port $PORT --ipv6 --addr 127.0.0.1 2>&1 | grep -F "malformed --addr argument" > /dev/null || exit 1
 
   echo "===> run tests against a basic instance (generates darkhttpd.gcda)"
-  ./a.out $DIR --port $PORT --log test.out.log \
+  ./a.out $DIR --port $PORT --addr $ADDR --log test.out.log \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
@@ -68,7 +69,7 @@ runtests() {
   wait $PID
 
   echo "===> run --forward tests"
-  ./a.out $DIR --port $PORT \
+  ./a.out $DIR --port $PORT --addr $ADDR \
     --forward example.com http://www.example.com \
     --forward secure.example.com https://www.example.com/secure \
     >>test.out.stdout 2>>test.out.stderr &
@@ -79,7 +80,7 @@ runtests() {
   wait $PID
 
   echo "===> run --forward-all tests"
-  ./a.out $DIR --port $PORT \
+  ./a.out $DIR --port $PORT --addr $ADDR \
     --forward example.com http://www.example.com \
     --forward-all http://catchall.example.com \
     >>test.out.stdout 2>>test.out.stderr &
@@ -90,7 +91,7 @@ runtests() {
   wait $PID
 
   echo "===> run --no-server-id tests"
-  ./a.out $DIR --port $PORT --no-server-id \
+  ./a.out $DIR --port $PORT --addr $ADDR --no-server-id \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
@@ -104,7 +105,7 @@ runtests() {
   echo "# this is a comment" >> $DIR/mimemap
   printf "test/type3\\tapp3\r\n" >> $DIR/mimemap
   echo "test/type2  ap2" >> $DIR/mimemap
-  ./a.out $DIR --port $PORT \
+  ./a.out $DIR --port $PORT --addr $ADDR \
     --mimetypes $DIR/mimemap \
     --default-mimetype test/default \
     >>test.out.stdout 2>>test.out.stderr &
@@ -115,7 +116,7 @@ runtests() {
   wait $PID
 
   echo "===> run --no-listing tests"
-  ./a.out $DIR --port $PORT --no-listing \
+  ./a.out $DIR --port $PORT --addr $ADDR --no-listing \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
@@ -124,7 +125,7 @@ runtests() {
   wait $PID
 
   echo "===> run --timeout tests"
-  ./a.out $DIR --port $PORT --timeout 1 \
+  ./a.out $DIR --port $PORT --addr $ADDR --timeout 1 \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
@@ -137,7 +138,7 @@ runtests() {
   ./a.out . --auth >/dev/null 2>/dev/null
   ./a.out . --auth missing_colon >/dev/null 2>/dev/null
   # Correct flags:
-  ./a.out $DIR --port $PORT --auth myuser:mypass \
+  ./a.out $DIR --port $PORT --addr $ADDR --auth myuser:mypass \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
@@ -151,7 +152,7 @@ runtests() {
   ./a.out . --header missing_colon >/dev/null 2>/dev/null
   ./a.out . --header $'X-Header: Abusive\r\n\r\nBody' >/dev/null 2>/dev/null
   # Correct flags:
-  ./a.out $DIR --port $PORT \
+  ./a.out $DIR --port $PORT --addr $ADDR \
     --header 'X-Header-A: First Value' --header 'X-Header-B: Second Value' \
     --forward example.com http://www.example.com \
     >>test.out.stdout 2>>test.out.stderr &
@@ -162,7 +163,7 @@ runtests() {
   wait $PID
 
   echo "===> run --forward-https tests"
-  ./a.out $DIR --port $PORT --forward-https \
+  ./a.out $DIR --port $PORT --addr $ADDR --forward-https \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
