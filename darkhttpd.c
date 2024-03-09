@@ -923,16 +923,22 @@ static void usage(const char *argv0) {
     printf("\t--addr ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
     "\t\twhich one to bind the listening port to.\n\n");
+#ifdef HAVE_INET6
+    printf("\t--ipv6\n"
+    "\t\tListen on IPv6 address.\n\n");
+#endif
+    printf("\t--daemon (default: don't daemonize)\n"
+    "\t\tDetach from the controlling terminal and run in the background.\n\n");
+    printf("\t--pidfile filename (default: no pidfile)\n"
+    "\t\tWrite PID to the specified file. Note that if you are\n"
+    "\t\tusing --chroot, then the pidfile must be relative to,\n"
+    "\t\tand inside the wwwroot.\n\n");
     printf("\t--maxconn number (default: system maximum)\n"
     "\t\tSpecifies how many concurrent connections to accept.\n\n");
     printf("\t--log filename (default: stdout)\n"
     "\t\tSpecifies which file to append the request log to.\n\n");
     printf("\t--syslog\n"
     "\t\tUse syslog for request log.\n\n");
-    printf("\t--chroot (default: don't chroot)\n"
-    "\t\tLocks server into wwwroot directory for added security.\n\n");
-    printf("\t--daemon (default: don't daemonize)\n"
-    "\t\tDetach from the controlling terminal and run in the background.\n\n");
     printf("\t--index filename (default: %s)\n"
     "\t\tDefault file to serve when a directory is requested.\n\n",
         index_name);
@@ -945,16 +951,14 @@ static void usage(const char *argv0) {
         octet_stream);
     printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n\n");
-    printf("\t--pidfile filename (default: no pidfile)\n"
-    "\t\tWrite PID to the specified file.  Note that if you are\n"
-    "\t\tusing --chroot, then the pidfile must be relative to,\n"
-    "\t\tand inside the wwwroot.\n\n");
-    printf("\t--no-keepalive\n"
-    "\t\tDisables HTTP Keep-Alive functionality.\n\n");
+    printf("\t--chroot (default: don't chroot)\n"
+    "\t\tLocks server into wwwroot directory for added security.\n\n");
 #ifdef __FreeBSD__
     printf("\t--accf (default: don't use acceptfilter)\n"
-    "\t\tUse acceptfilter.  Needs the accf_http module loaded.\n\n");
+    "\t\tUse acceptfilter. Needs the accf_http kernel module loaded.\n\n");
 #endif
+    printf("\t--no-keepalive\n"
+    "\t\tDisables HTTP Keep-Alive functionality.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
@@ -963,6 +967,10 @@ static void usage(const char *argv0) {
     printf("\t--forward-all url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tAll requests are redirected to the corresponding url.\n\n");
+    printf("\t--forward-https\n"
+    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
+    "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
+    "\t\tthat supports SSL.\n\n");
     printf("\t--no-server-id\n"
     "\t\tDon't identify the server type in headers\n"
     "\t\tor directory listings.\n\n");
@@ -974,18 +982,11 @@ static void usage(const char *argv0) {
     "\t\tEnable basic authentication. This is *INSECURE*: passwords\n"
     "\t\tare sent unencrypted over HTTP, plus the password is visible\n"
     "\t\tin ps(1) to other users on the system.\n\n");
-    printf("\t--forward-https\n"
-    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
-    "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
-    "\t\tthat supports SSL.\n\n");
     printf("\t--header 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
     "\t\tthe headers are added in order of appearance.\n\n");
-#ifdef HAVE_INET6
-    printf("\t--ipv6\n"
-    "\t\tListen on IPv6 address.\n\n");
-#else
+#ifndef HAVE_INET6
     printf("\t(This binary was built without IPv6 support: -DNO_IPV6)\n\n");
 #endif
 }
