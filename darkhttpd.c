@@ -1587,7 +1587,7 @@ static void default_reply(struct connection *conn,
     rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
-     "<html><head><title>%d %s</title></head><body>\n"
+     "<!DOCTYPE html><html><head><title>%d %s</title></head><body>\n"
      "<h1>%s</h1>\n" /* errname */
      "%s\n" /* reason */
      "<hr>\n"
@@ -1635,7 +1635,7 @@ static void redirect(struct connection *conn, const char *format, ...) {
     rfc1123_date(date, now);
 
     conn->reply_length = xasprintf(&(conn->reply),
-     "<html><head><title>301 Moved Permanently</title></head><body>\n"
+     "<!DOCTYPE html><html><head><title>301 Moved Permanently</title></head><body>\n"
      "<h1>Moved Permanently</h1>\n"
      "Moved to: <a href=\"%s\">%s</a>\n" /* where x 2 */
      "<hr>\n"
@@ -2042,14 +2042,14 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     }
 
     listing = make_apbuf();
-    append(listing, "<html>\n<head>\n<title>");
+    append(listing, "<!DOCTYPE html>\n<html>\n<head>\n<title>");
     append_escaped(listing, decoded_url);
     append(listing,
             "</title>\n"
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
             "</head>\n<body>\n<h1>");
     append_escaped(listing, decoded_url);
-    append(listing, "</h1>\n<tt><pre>\n");
+    append(listing, "</h1>\n<pre>\n");
 
     spaces = xmalloc(maxlen);
     memset(spaces, ' ', maxlen);
@@ -2088,9 +2088,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     free(list);
     free(spaces);
 
-    append(listing,
-     "</pre></tt>\n"
-     "<hr>\n");
+    append(listing, "</pre>\n<hr>\n");
 
     rfc1123_date(date, now);
     append(listing, generated_on(date));
