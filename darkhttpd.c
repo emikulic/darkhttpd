@@ -85,6 +85,13 @@ static const int debug = 1;
 # endif
 #endif
 
+/* https://github.com/hboetes/mg/issues/7#issuecomment-475869095 */
+#if defined(__APPLE__) || defined(__NetBSD__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#endif
+
 #ifdef HAVE_NON_ROOT_CHROOT
 #include <sys/procctl.h>
 #endif
