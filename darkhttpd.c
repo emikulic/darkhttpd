@@ -2072,15 +2072,20 @@ static void generate_dir_listing(struct connection *conn, const char *path,
         append_escaped(listing, list[i]->name);
         append(listing, "</a>");
 
-        if (list[i]->is_dir)
-            append(listing, "/\n");
+        char buf[DIR_LIST_MTIME_SIZE];
+        struct tm tm;
+        localtime_r(&list[i]->mtime.tv_sec, &tm);
+        strftime(buf, sizeof buf, DIR_LIST_MTIME_FORMAT, &tm);
+
+        if (list[i]->is_dir) {
+            append(listing, "/");
+            appendl(listing, spaces, maxlen-strlen(list[i]->name));
+            append(listing, buf);
+            append(listing, "\n");
+        }
         else {
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
             append(listing, " ");
-            char buf[DIR_LIST_MTIME_SIZE];
-            struct tm tm;
-            localtime_r(&list[i]->mtime.tv_sec, &tm);
-            strftime(buf, sizeof buf, DIR_LIST_MTIME_FORMAT, &tm);
             append(listing, buf);
             appendf(listing, " %10llu\n", llu(list[i]->size));
         }
