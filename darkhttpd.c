@@ -2016,7 +2016,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
-    size_t maxlen = 2; /* There has to be ".." */
+    size_t maxlen = 3; /* There has to be ".." */
     int i;
     struct apbuf *listing;
 
@@ -2037,6 +2037,8 @@ static void generate_dir_listing(struct connection *conn, const char *path,
 
     for (i=0; i<listsize; i++) {
         size_t tmp = strlen(list[i]->name);
+        if (list[i]->is_dir)
+            tmp++; /* add 1 for '/' */
         if (maxlen < tmp)
             maxlen = tmp;
     }
