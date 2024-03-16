@@ -327,7 +327,7 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
-           want_keepalive = 1, want_server_id = 1;
+           want_keepalive = 1, want_server_id = 1, want_single_file = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
@@ -966,6 +966,9 @@ static void usage(const char *argv0) {
 #endif
     printf("\t--no-keepalive\n"
     "\t\tDisables HTTP Keep-Alive functionality.\n\n");
+    printf("\t--single-file\n"
+    "\t\tOnly serve a single file provided as /path/to/wwwroot instead\n"
+    "\t\tof a whole directory.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
@@ -1175,6 +1178,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--syslog") == 0) {
             syslog_enabled = 1;
+        }
+        else if (strcmp(argv[i], "--single-file") == 0) {
+            want_single_file = 1;
         }
         else if (strcmp(argv[i], "--forward") == 0) {
             const char *host, *url;
@@ -2170,8 +2176,12 @@ static void process_get(struct connection *conn) {
         return;
     }
 
-    /* does it end in a slash? serve up url/index_name */
-    if (decoded_url[strlen(decoded_url)-1] == '/') {
+    if (want_single_file == 1) {
+        xasprintf(&target, "%s", wwwroot);
+        mimetype = url_content_type(wwwroot);
+    }
+    else if (decoded_url[strlen(decoded_url)-1] == '/') {
+        /* does it end in a slash? serve up url/index_name */
         xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
         if (!file_exists(target)) {
             free(target);
@@ -2231,7 +2241,7 @@ static void process_get(struct connection *conn) {
     }
 
     /* make sure it's a regular file */
-    if (S_ISDIR(filestat.st_mode)) {
+    if ((S_ISDIR(filestat.st_mode)) && (want_single_file == 0)) {
         redirect(conn, "%s/", conn->url);
         return;
     }
