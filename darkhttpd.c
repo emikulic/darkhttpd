@@ -2177,7 +2177,7 @@ static void process_get(struct connection *conn) {
     }
 
     if (want_single_file == 1) {
-        xasprintf(&target, "%s", wwwroot);
+        target = xstrdup(wwwroot);
         mimetype = url_content_type(wwwroot);
     }
     else if (decoded_url[strlen(decoded_url)-1] == '/') {
@@ -2968,12 +2968,31 @@ int main(int argc, char **argv) {
         #endif
 
         tzset(); /* read /etc/localtime before we chroot */
-        if (chdir(wwwroot) == -1)
-            err(1, "chdir(%s)", wwwroot);
-        if (chroot(wwwroot) == -1)
-            err(1, "chroot(%s)", wwwroot);
-        printf("chrooted to `%s'\n", wwwroot);
-        wwwroot[0] = '\0'; /* empty string */
+        if (want_single_file) {
+            ssize_t file_ofs;
+            char *ch_dir = xstrdup(wwwroot);
+            for (file_ofs = strlen(wwwroot);
+                 (file_ofs >= 0) && (wwwroot[file_ofs] != '/'); file_ofs--)
+                ;
+            /* wwwroot file is not in current directory */
+            if (file_ofs > 0) {
+                ch_dir[file_ofs] = '\0';
+                if (chdir(ch_dir) == -1)
+                    err(1, "chdir(%s)", ch_dir);
+                strcpy(wwwroot, &wwwroot[file_ofs]);
+            }
+            if (chroot(".") == -1)
+                err(1, "chroot(.)");
+            printf("chrooted to `%s'\n", ch_dir);
+            free(ch_dir);
+        } else {
+            if (chdir(wwwroot) == -1)
+                err(1, "chdir(%s)", wwwroot);
+            if (chroot(wwwroot) == -1)
+                err(1, "chroot(%s)", wwwroot);
+            printf("chrooted to `%s'\n", wwwroot);
+            wwwroot[0] = '\0'; /* empty string */
+        }
     }
     if (drop_gid != INVALID_GID) {
         gid_t list[1];
