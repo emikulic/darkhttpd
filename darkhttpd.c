@@ -2983,11 +2983,11 @@ int main(int argc, char **argv) {
                     err(1, "chdir(%s)", ch_dir);
                 memmove(wwwroot, &wwwroot[file_ofs], len - file_ofs);
             } else {
-                ch_dir[0]='.';
-                ch_dir[1]='\0';
+                ch_dir[0] = '.';
+                ch_dir[1] = '\0';
             }
-            if (chroot(".") == -1)
-                err(1, "chroot(.)");
+            if (chroot(ch_dir) == -1)
+                err(1, "chroot(%s)", ch_dir);
             printf("chrooted to `%s'\n", ch_dir);
             free(ch_dir);
         } else {
