@@ -886,7 +886,7 @@ static void init_sockin(void) {
         if (getsockname(sockin, (struct sockaddr *)&addrin6, &addrin_len) == -1)
             err(1, "getsockname()");
         printf("listening on: http://[%s]:%u/\n",
-            get_address_text(&addrin6.sin6_addr), bindport);
+            get_address_text(&addrin6.sin6_addr), ntohs(addrin.sin_port));
     } else
 #endif
     {
@@ -899,7 +899,7 @@ static void init_sockin(void) {
         if (getsockname(sockin, (struct sockaddr *)&addrin, &addrin_len) == -1)
             err(1, "getsockname()");
         printf("listening on: http://%s:%u/\n",
-            get_address_text(&addrin.sin_addr), bindport);
+            get_address_text(&addrin.sin_addr), ntohs(addrin.sin_port));
     }
 
     /* listen on socket */
