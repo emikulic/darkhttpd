@@ -2176,7 +2176,7 @@ static void process_get(struct connection *conn) {
         return;
     }
 
-    if (want_single_file == 1) {
+    if (want_single_file) {
         target = xstrdup(wwwroot);
         mimetype = url_content_type(wwwroot);
     }
@@ -2970,16 +2970,18 @@ int main(int argc, char **argv) {
         tzset(); /* read /etc/localtime before we chroot */
         if (want_single_file) {
             ssize_t file_ofs;
+            const size_t len = strlen(wwwroot) + 1;
             char *ch_dir = xstrdup(wwwroot);
             for (file_ofs = strlen(wwwroot);
-                 (file_ofs >= 0) && (wwwroot[file_ofs] != '/'); file_ofs--)
+                 (file_ofs >= 0) && (wwwroot[file_ofs] != '/');
+                 file_ofs--)
                 ;
             /* wwwroot file is not in current directory */
             if (file_ofs > 0) {
                 ch_dir[file_ofs] = '\0';
                 if (chdir(ch_dir) == -1)
                     err(1, "chdir(%s)", ch_dir);
-                strcpy(wwwroot, &wwwroot[file_ofs]);
+                memmove(wwwroot, &wwwroot[file_ofs], len - file_ofs);
             }
             if (chroot(".") == -1)
                 err(1, "chroot(.)");
