@@ -2977,8 +2977,8 @@ int main(int argc, char **argv) {
                  file_ofs--)
                 ;
             /* wwwroot file is not in current directory */
-            if (file_ofs > 0) {
-                ch_dir[file_ofs] = '\0';
+            if (file_ofs >= 0) {
+                ch_dir[file_ofs + 1] = '\0';
                 if (chdir(ch_dir) == -1)
                     err(1, "chdir(%s)", ch_dir);
                 memmove(wwwroot, &wwwroot[file_ofs], len - file_ofs);
