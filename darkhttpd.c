@@ -2241,7 +2241,7 @@ static void process_get(struct connection *conn) {
     }
 
     /* make sure it's a regular file */
-    if ((S_ISDIR(filestat.st_mode)) && (want_single_file == 0)) {
+    if ((S_ISDIR(filestat.st_mode)) && (!want_single_file)) {
         redirect(conn, "%s/", conn->url);
         return;
     }
@@ -2969,27 +2969,27 @@ int main(int argc, char **argv) {
 
         tzset(); /* read /etc/localtime before we chroot */
         if (want_single_file) {
-            ssize_t file_ofs;
-            const size_t len = strlen(wwwroot) + 1;
-            char *ch_dir = xstrdup(wwwroot);
-            for (file_ofs = strlen(wwwroot);
-                 (file_ofs >= 0) && (wwwroot[file_ofs] != '/');
-                 file_ofs--)
+            off_t ofs;
+            size_t len = strlen(wwwroot) + 1;
+            char *path = xstrdup(wwwroot);
+            for (ofs = strlen(wwwroot);
+                 (ofs >= 0) && (wwwroot[ofs] != '/');
+                 ofs--)
                 ;
             /* wwwroot file is not in current directory */
-            if (file_ofs >= 0) {
-                ch_dir[file_ofs + 1] = '\0';
-                if (chdir(ch_dir) == -1)
-                    err(1, "chdir(%s)", ch_dir);
-                memmove(wwwroot, &wwwroot[file_ofs], len - file_ofs);
+            if (ofs >= 0) {
+                path[ofs + 1] = '\0';
+                if (chdir(path) == -1)
+                    err(1, "chdir(%s)", path);
+                memmove(wwwroot, &wwwroot[ofs], len - ofs);
             } else {
-                ch_dir[0] = '.';
-                ch_dir[1] = '\0';
+                path[0] = '.';
+                path[1] = '\0';
             }
-            if (chroot(ch_dir) == -1)
-                err(1, "chroot(%s)", ch_dir);
-            printf("chrooted to `%s'\n", ch_dir);
-            free(ch_dir);
+            if (chroot(path) == -1)
+                err(1, "chroot(%s)", path);
+            printf("chrooted to `%s'\n", path);
+            free(path);
         } else {
             if (chdir(wwwroot) == -1)
                 err(1, "chdir(%s)", wwwroot);
