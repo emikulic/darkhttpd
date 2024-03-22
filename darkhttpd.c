@@ -967,7 +967,7 @@ static void usage(const char *argv0) {
     printf("\t--no-keepalive\n"
     "\t\tDisables HTTP Keep-Alive functionality.\n\n");
     printf("\t--single-file\n"
-    "\t\tOnly serve a single file provided as /path/to/wwwroot instead\n"
+    "\t\tOnly serve a single file provided as /path/to/file instead\n"
     "\t\tof a whole directory.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
@@ -2916,6 +2916,48 @@ static void pidfile_create(void) {
 }
 /* [<-] end of pidfile helpers. */
 
+static void change_root(void) {
+    #ifdef HAVE_NON_ROOT_CHROOT
+    /* We run this even as root, which should never be a bad thing. */
+    int arg = PROC_NO_NEW_PRIVS_ENABLE;
+    int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
+    if (error != 0)
+        err(1, "procctl");
+    #endif
+
+    tzset(); /* read /etc/localtime before we chroot */
+    if (want_single_file) {
+        off_t ofs;
+        size_t len = strlen(wwwroot) + 1;
+        char *path = xstrdup(wwwroot);
+        for (ofs = strlen(wwwroot);
+             (ofs >= 0) && (wwwroot[ofs] != '/');
+             ofs--)
+            ;
+        /* wwwroot file is not in current directory */
+        if (ofs >= 0) {
+            path[ofs + 1] = '\0';
+            if (chdir(path) == -1)
+                err(1, "chdir(%s)", path);
+            memmove(wwwroot, &wwwroot[ofs], len - ofs);
+        } else {
+            path[0] = '.';
+            path[1] = '\0';
+        }
+        if (chroot(path) == -1)
+            err(1, "chroot(%s)", path);
+        printf("chrooted to `%s'\n", path);
+        free(path);
+    } else {
+        if (chdir(wwwroot) == -1)
+            err(1, "chdir(%s)", wwwroot);
+        if (chroot(wwwroot) == -1)
+            err(1, "chroot(%s)", wwwroot);
+        printf("chrooted to `%s'\n", wwwroot);
+        wwwroot[0] = '\0'; /* empty string */
+    }
+}
+
 /* Close all sockets and FILEs and exit. */
 static void stop_running(int sig unused) {
     running = 0;
@@ -2959,45 +3001,7 @@ int main(int argc, char **argv) {
 
     /* security */
     if (want_chroot) {
-        #ifdef HAVE_NON_ROOT_CHROOT
-        /* We run this even as root, which should never be a bad thing. */
-        int arg = PROC_NO_NEW_PRIVS_ENABLE;
-        int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
-        if (error != 0)
-            err(1, "procctl");
-        #endif
-
-        tzset(); /* read /etc/localtime before we chroot */
-        if (want_single_file) {
-            off_t ofs;
-            size_t len = strlen(wwwroot) + 1;
-            char *path = xstrdup(wwwroot);
-            for (ofs = strlen(wwwroot);
-                 (ofs >= 0) && (wwwroot[ofs] != '/');
-                 ofs--)
-                ;
-            /* wwwroot file is not in current directory */
-            if (ofs >= 0) {
-                path[ofs + 1] = '\0';
-                if (chdir(path) == -1)
-                    err(1, "chdir(%s)", path);
-                memmove(wwwroot, &wwwroot[ofs], len - ofs);
-            } else {
-                path[0] = '.';
-                path[1] = '\0';
-            }
-            if (chroot(path) == -1)
-                err(1, "chroot(%s)", path);
-            printf("chrooted to `%s'\n", path);
-            free(path);
-        } else {
-            if (chdir(wwwroot) == -1)
-                err(1, "chdir(%s)", wwwroot);
-            if (chroot(wwwroot) == -1)
-                err(1, "chroot(%s)", wwwroot);
-            printf("chrooted to `%s'\n", wwwroot);
-            wwwroot[0] = '\0'; /* empty string */
-        }
+        change_root();
     }
     if (drop_gid != INVALID_GID) {
         gid_t list[1];
