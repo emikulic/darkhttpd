@@ -9,4 +9,5 @@ devel/test.out.stdout
 devel/test.out.stderr
 devel/test_make_safe_uri
 devel/test_password_equal
+devel/test_get_wwwroot_parent
 devel/tmp.httpd.tests
