@@ -196,6 +196,14 @@ if ./test_password_equal | egrep '^FAIL:'; then
   exit 1
 fi
 
+echo "===> test_get_wwwroot_parent"
+$CC -g -O2 -fsanitize=address -fsanitize=undefined \
+  test_get_wwwroot_parent.c -o test_get_wwwroot_parent | exit 1
+if ./test_get_wwwroot_parent | egrep '^FAIL:'; then
+  echo test_get_wwwroot_parent failed >&2
+  exit 1
+fi
+
 # Check that the code builds with various defines.
 echo "===> building without -DDEBUG"
 $CC -O2 -Wall ../darkhttpd.c || exit 1
@@ -239,7 +247,7 @@ $CC -g -O2 -fprofile-arcs -ftest-coverage -fsanitize=address \
   exit 1
 }
 echo "===> generating report"
-gcov darkhttpd
+gcov a-darkhttpd
 chmod 755 $DIR/forbidden
 chmod 755 $DIR/unreadable
 rm -rf $DIR

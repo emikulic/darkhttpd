@@ -9,6 +9,12 @@ clean:
 		test.pyc \
 		test_make_safe_uri \
 		test_password_equal \
-		a.out darkhttpd.gcda darkhttpd.gcno \
-		fuzz_darkhttpd.o fuzz_llvm_make_safe_uri fuzz_socket
+		test_get_wwwroot_parent \
+		a.out \
+		darkhttpd.gcda \
+		darkhttpd.gcno \
+		fuzz_darkhttpd.o \
+		fuzz_llvm_make_safe_uri \
+		fuzz_socket \
+		fuzz_get_wwwroot_parent
 	rm -rf tmp.fuzz tmp.httpd.tests
