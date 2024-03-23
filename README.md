@@ -127,6 +127,12 @@ Run in the background and create a pidfile:
 ./darkhttpd /var/www/htdocs --pidfile /var/run/httpd.pid --daemon
 ```
 
+Serve only one file instead of a whole directory:
+
+```
+./darkhttpd ~/public_html/index.html --single-file
+```
+
 Web forward (301) requests for some hosts:
 
 ```

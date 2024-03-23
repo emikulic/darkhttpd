@@ -327,7 +327,7 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
-           want_keepalive = 1, want_server_id = 1;
+           want_keepalive = 1, want_server_id = 1, want_single_file = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
@@ -966,6 +966,9 @@ static void usage(const char *argv0) {
 #endif
     printf("\t--no-keepalive\n"
     "\t\tDisables HTTP Keep-Alive functionality.\n\n");
+    printf("\t--single-file\n"
+    "\t\tOnly serve a single file provided as /path/to/file instead\n"
+    "\t\tof a whole directory.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
@@ -1175,6 +1178,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--syslog") == 0) {
             syslog_enabled = 1;
+        }
+        else if (strcmp(argv[i], "--single-file") == 0) {
+            want_single_file = 1;
         }
         else if (strcmp(argv[i], "--forward") == 0) {
             const char *host, *url;
@@ -2170,8 +2176,12 @@ static void process_get(struct connection *conn) {
         return;
     }
 
-    /* does it end in a slash? serve up url/index_name */
-    if (decoded_url[strlen(decoded_url)-1] == '/') {
+    if (want_single_file) {
+        target = xstrdup(wwwroot);
+        mimetype = url_content_type(wwwroot);
+    }
+    else if (decoded_url[strlen(decoded_url)-1] == '/') {
+        /* does it end in a slash? serve up url/index_name */
         xasprintf(&target, "%s%s%s", wwwroot, decoded_url, index_name);
         if (!file_exists(target)) {
             free(target);
@@ -2231,7 +2241,7 @@ static void process_get(struct connection *conn) {
     }
 
     /* make sure it's a regular file */
-    if (S_ISDIR(filestat.st_mode)) {
+    if ((S_ISDIR(filestat.st_mode)) && (!want_single_file)) {
         redirect(conn, "%s/", conn->url);
         return;
     }
@@ -2906,6 +2916,48 @@ static void pidfile_create(void) {
 }
 /* [<-] end of pidfile helpers. */
 
+static void change_root(void) {
+    #ifdef HAVE_NON_ROOT_CHROOT
+    /* We run this even as root, which should never be a bad thing. */
+    int arg = PROC_NO_NEW_PRIVS_ENABLE;
+    int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
+    if (error != 0)
+        err(1, "procctl");
+    #endif
+
+    tzset(); /* read /etc/localtime before we chroot */
+    if (want_single_file) {
+        off_t ofs;
+        size_t len = strlen(wwwroot) + 1;
+        char *path = xstrdup(wwwroot);
+        for (ofs = strlen(wwwroot);
+             (ofs >= 0) && (wwwroot[ofs] != '/');
+             ofs--)
+            ;
+        /* wwwroot file is not in current directory */
+        if (ofs >= 0) {
+            path[ofs + 1] = '\0';
+            if (chdir(path) == -1)
+                err(1, "chdir(%s)", path);
+            memmove(wwwroot, &wwwroot[ofs], len - ofs);
+        } else {
+            path[0] = '.';
+            path[1] = '\0';
+        }
+        if (chroot(path) == -1)
+            err(1, "chroot(%s)", path);
+        printf("chrooted to `%s'\n", path);
+        free(path);
+    } else {
+        if (chdir(wwwroot) == -1)
+            err(1, "chdir(%s)", wwwroot);
+        if (chroot(wwwroot) == -1)
+            err(1, "chroot(%s)", wwwroot);
+        printf("chrooted to `%s'\n", wwwroot);
+        wwwroot[0] = '\0'; /* empty string */
+    }
+}
+
 /* Close all sockets and FILEs and exit. */
 static void stop_running(int sig unused) {
     running = 0;
@@ -2949,21 +3001,7 @@ int main(int argc, char **argv) {
 
     /* security */
     if (want_chroot) {
-        #ifdef HAVE_NON_ROOT_CHROOT
-        /* We run this even as root, which should never be a bad thing. */
-        int arg = PROC_NO_NEW_PRIVS_ENABLE;
-        int error = procctl(P_PID, (int)getpid(), PROC_NO_NEW_PRIVS_CTL, &arg);
-        if (error != 0)
-            err(1, "procctl");
-        #endif
-
-        tzset(); /* read /etc/localtime before we chroot */
-        if (chdir(wwwroot) == -1)
-            err(1, "chdir(%s)", wwwroot);
-        if (chroot(wwwroot) == -1)
-            err(1, "chroot(%s)", wwwroot);
-        printf("chrooted to `%s'\n", wwwroot);
-        wwwroot[0] = '\0'; /* empty string */
+        change_root();
     }
     if (drop_gid != INVALID_GID) {
         gid_t list[1];
