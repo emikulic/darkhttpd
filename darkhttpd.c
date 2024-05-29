@@ -1888,9 +1888,6 @@ struct dlent {
 };
 
 static int dlent_cmp(const void *a, const void *b) {
-    if (strcmp((*((const struct dlent * const *)a))->name, "..") == 0) {
-        return -1;  /* Special-case ".." to come first. */
-    }
     return strcmp((*((const struct dlent * const *)a))->name,
                   (*((const struct dlent * const *)b))->name);
 }
@@ -1917,9 +1914,8 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     while ((ent = readdir(dir)) != NULL) {
         struct stat s;
 
-        if ((strncmp(path, wwwroot, strlen(path) - 1) == 0) &&
-            (strcmp(ent->d_name, "..") == 0))
-            continue; /* skip "..", when in wwwroot */
+        if (strcmp(ent->d_name, "..") == 0)
+            continue; /* skip ".." */
         if (strcmp(ent->d_name, ".") == 0)
             continue; /* skip "." */
         assert(strlen(ent->d_name) <= MAXNAMLEN);
@@ -2061,6 +2057,10 @@ static void generate_dir_listing(struct connection *conn, const char *path,
 
     spaces = xmalloc(maxlen);
     memset(spaces, ' ', maxlen);
+
+    if (strcmp(path, "./") != 0) {
+        append(listing, "<a href=\"../\">..</a>/\n");
+    }
 
     for (i=0; i<listsize; i++) {
         /* If a filename is made up of entirely unsafe chars,
