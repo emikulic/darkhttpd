@@ -1914,10 +1914,8 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     while ((ent = readdir(dir)) != NULL) {
         struct stat s;
 
-        if (strcmp(ent->d_name, "..") == 0)
-            continue; /* skip ".." */
-        if (strcmp(ent->d_name, ".") == 0)
-            continue; /* skip "." */
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+            continue; /* skip "." and ".." */
         assert(strlen(ent->d_name) <= MAXNAMLEN);
         sprintf(currname, "%s%s", path, ent->d_name);
         if (stat(currname, &s) == -1)
@@ -2058,9 +2056,9 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     spaces = xmalloc(maxlen);
     memset(spaces, ' ', maxlen);
 
-    if (strcmp(path, "./") != 0) {
+    /* append ".." entry if not in wwwroot */
+    if (strcmp(path, "./") != 0)
         append(listing, "<a href=\"../\">..</a>/\n");
-    }
 
     for (i=0; i<listsize; i++) {
         /* If a filename is made up of entirely unsafe chars,
