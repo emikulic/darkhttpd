@@ -2057,7 +2057,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     memset(spaces, ' ', maxlen);
 
     /* append ".." entry if not in wwwroot */
-    if (strcmp(path, "./") != 0)
+    if (strncmp(path, wwwroot, strlen(path) - 1) != 0)
         append(listing, "<a href=\"../\">..</a>/\n");
 
     for (i=0; i<listsize; i++) {
