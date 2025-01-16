@@ -799,6 +799,10 @@ static const char *get_address_text(const void *addr) {
         static char text_addr[INET6_ADDRSTRLEN];
         const struct in6_addr *in6_addr = addr;
         inet_ntop(AF_INET6, in6_addr, text_addr, INET6_ADDRSTRLEN);
+        /* IPv4 addresses via dual stack result in mapped IPv6 addresses.
+           Strip the prefix (::ffff:) for plain IPv4 addresses. */
+        if (IN6_IS_ADDR_V4MAPPED(in6_addr))
+            return text_addr + 7;
         return text_addr;
     } else
 #endif
