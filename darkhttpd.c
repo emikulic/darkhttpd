@@ -797,8 +797,8 @@ static const char *get_address_text(const void *addr) {
 #ifdef HAVE_INET6
     if (inet6) {
         static char text_addr[INET6_ADDRSTRLEN];
-        inet_ntop(AF_INET6, (const struct in6_addr *)addr, text_addr,
-                  INET6_ADDRSTRLEN);
+        const struct in6_addr *in6_addr = addr;
+        inet_ntop(AF_INET6, in6_addr, text_addr, INET6_ADDRSTRLEN);
         return text_addr;
     } else
 #endif
