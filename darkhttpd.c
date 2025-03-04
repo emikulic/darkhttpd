@@ -2918,6 +2918,38 @@ static void pidfile_create(void) {
 }
 /* [<-] end of pidfile helpers. */
 
+/* In the --single-file case, wwwroot is a path to a file.
+ * Return the parent dir of the wwwroot and mutate the wwwroot
+ * to just the filename. Caller must free the return value. */
+char* get_wwwroot_parent() {
+    off_t ofs;
+    size_t len = strlen(wwwroot) + 1;
+    if (len == 1) return xstrdup(".");
+    char *path = xstrdup(wwwroot);
+    for (ofs = strlen(wwwroot);
+            (ofs >= 0) && (wwwroot[ofs] != '/');
+            ofs--)
+        ;
+    /* wwwroot file is not in current directory */
+    if (ofs >= 0) {
+        path[ofs + 1] = '\0';
+        memmove(wwwroot, &wwwroot[ofs], len - ofs);
+    } else {
+        path[0] = '.';
+        path[1] = '\0';
+    }
+    return path;
+}
+
+static void xchroot(const char *path) {
+    if (chdir(path) == -1)
+        err(1, "chdir(%s)", path);
+    if (chroot(path) == -1)
+        err(1, "chroot(%s)", path);
+    printf("chrooted to `%s'\n", path);
+}
+
+/* chroot() into wwwroot. */
 static void change_root(void) {
     #ifdef HAVE_NON_ROOT_CHROOT
     /* We run this even as root, which should never be a bad thing. */
@@ -2929,33 +2961,11 @@ static void change_root(void) {
 
     tzset(); /* read /etc/localtime before we chroot */
     if (want_single_file) {
-        off_t ofs;
-        size_t len = strlen(wwwroot) + 1;
-        char *path = xstrdup(wwwroot);
-        for (ofs = strlen(wwwroot);
-             (ofs >= 0) && (wwwroot[ofs] != '/');
-             ofs--)
-            ;
-        /* wwwroot file is not in current directory */
-        if (ofs >= 0) {
-            path[ofs + 1] = '\0';
-            if (chdir(path) == -1)
-                err(1, "chdir(%s)", path);
-            memmove(wwwroot, &wwwroot[ofs], len - ofs);
-        } else {
-            path[0] = '.';
-            path[1] = '\0';
-        }
-        if (chroot(path) == -1)
-            err(1, "chroot(%s)", path);
-        printf("chrooted to `%s'\n", path);
+        char *path = get_wwwroot_parent();
+        xchroot(path);
         free(path);
     } else {
-        if (chdir(wwwroot) == -1)
-            err(1, "chdir(%s)", wwwroot);
-        if (chroot(wwwroot) == -1)
-            err(1, "chroot(%s)", wwwroot);
-        printf("chrooted to `%s'\n", wwwroot);
+        xchroot(wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
 }
