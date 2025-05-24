@@ -1561,6 +1561,51 @@ static char *urldecode(const char *url) {
     return out;
 }
 
+/**
+ * normalize_path – Convert an absolute-form HTTP request target into an
+ *                   origin-form path so the server can accept requests
+ *                   conforming to RFC 9112 §3.2.2.
+ *
+ * RFC 9112 §3.2.2 permits clients (especially forward proxies) to send the
+ * request-line in “absolute-form”, e.g.:
+ *
+ *     GET http://example.com/foo/bar?q=1 HTTP/1.1
+ *
+ * Many origin servers expect the traditional “origin-form” instead:
+ *
+ *     GET /foo/bar?q=1 HTTP/1.1
+ *
+ * This helper strips the <scheme> "://" and the authority component
+ * ("host[:port]") from an absolute URI, leaving only the path (plus any query
+ * or fragment).  If no ‘/’ is found after the authority, the function returns
+ * “/” to represent the root path, as required by the specification.
+ *
+ * - The transformation is performed **in-place**; therefore the caller must
+ *   pass a writable buffer.
+ * - The returned pointer is identical to the input pointer and refers to the
+ *   normalised path.
+ *
+ * Example:
+ *   char *buf = strdup("https://example.com:8080/foo/bar?a=1#frag");
+ *   printf("%s\n", normalize_path(buf));  // → "/foo/bar?a=1#frag"
+ */
+static char *normalize_path(char *url) {
+    size_t pos = 0;
+    if (url == NULL) return url;
+    if (strncmp(url, "http://", 7) == 0) {
+        pos += 7;
+    } else if (strncmp(url, "https://", 8) == 0) {
+        pos += 8;
+    }
+    if (pos > 0) {
+        while (url[pos] && url[pos] != '/') {
+            pos++;
+        }
+        memmove(url, url+pos, strlen(url)+1-pos);
+    }
+    return url;
+}
+
 /* Returns Connection or Keep-Alive header, depending on conn_close. */
 static const char *keep_alive(const struct connection *conn)
 {
@@ -1707,6 +1752,7 @@ static void redirect_https(struct connection *conn) {
 
     /* work out path of file being requested */
     url = urldecode(conn->url);
+    url = normalize_path(url);
 
     /* make sure it's safe */
     if (make_safe_url(url) == NULL) {
@@ -2144,6 +2190,7 @@ static void process_get(struct connection *conn) {
 
     /* work out path of file being requested */
     decoded_url = urldecode(conn->url);
+    decoded_url = normalize_path(decoded_url);
 
     /* make sure it's safe */
     if (make_safe_url(decoded_url) == NULL) {
