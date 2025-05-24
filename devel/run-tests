@@ -196,6 +196,14 @@ if ./test_password_equal | egrep '^FAIL:'; then
   exit 1
 fi
 
+echo "===> test_normalize_path"
+$CC -g -O2 -fsanitize=address -fsanitize=undefined \
+  test_normalize_path.c -o test_normalize_path || exit 1
+if ./test_normalize_path | egrep '^FAIL:'; then
+  echo test_normalize_path failed >&2
+  exit 1
+fi
+
 # Check that the code builds with various defines.
 echo "===> building without -DDEBUG"
 $CC -O2 -Wall ../darkhttpd.c || exit 1
