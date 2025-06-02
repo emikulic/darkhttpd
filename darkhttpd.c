@@ -327,7 +327,8 @@ static char *logfile_name = NULL;   /* NULL = no logging */
 static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
-           want_keepalive = 1, want_server_id = 1, want_single_file = 0;
+           want_keepalive = 1, want_server_id = 1, want_single_file = 0,
+           want_hide_dotfiles = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
@@ -973,6 +974,8 @@ static void usage(const char *argv0) {
     printf("\t--single-file\n"
     "\t\tOnly serve a single file provided as /path/to/file instead\n"
     "\t\tof a whole directory.\n\n");
+    printf("\t--hide-dotfiles\n"
+    "\t\tDon't serve dotfiles.\n\n");
     printf("\t--forward host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
@@ -1185,6 +1188,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--single-file") == 0) {
             want_single_file = 1;
+        }
+        else if (strcmp(argv[i], "--hide-dotfiles") == 0) {
+            want_hide_dotfiles = 1;
         }
         else if (strcmp(argv[i], "--forward") == 0) {
             const char *host, *url;
@@ -1966,6 +1972,8 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
 
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
             continue; /* skip "." and ".." */
+        if (want_hide_dotfiles && ent->d_name[0] == '.')
+            continue;
         assert(strlen(ent->d_name) <= MAXNAMLEN);
         sprintf(currname, "%s%s", path, ent->d_name);
         if (stat(currname, &s) == -1)
@@ -2223,6 +2231,19 @@ static void process_get(struct connection *conn) {
         redirect(conn, "%s%s", forward_to, decoded_url);
         free(decoded_url);
         return;
+    }
+
+    if (want_hide_dotfiles) {
+        size_t i;
+        for (i = 0; i < strlen(decoded_url) - 1; i++) {
+            if (decoded_url[i] == '/' && decoded_url[i + 1] == '.') {
+                free(decoded_url);
+                /* Don't serve dot files when using --hide-dotfiles */
+                default_reply(conn, 404, "Not Found",
+                    "The URL you requested was not found.");
+                return;
+            }
+        }
     }
 
     if (want_single_file) {
