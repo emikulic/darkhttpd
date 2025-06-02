@@ -48,8 +48,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   if (fd == -1) err(1, "socket");
 
   if (connect(fd, (const struct sockaddr*)&addrin, sizeof(struct sockaddr)) ==
-      -1)
+      -1) {
+    if (errno == EINTR) {
+      // Just a hiccup.
+      return 0;
+    }
     err(1, "connect");
+  }
 
   sent = send(fd, data, size, 0);
   if (sent != size) err(1, "send");
