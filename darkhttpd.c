@@ -513,8 +513,6 @@ static char *split_string(const char *src,
         const size_t left, const size_t right) {
     char *dest;
     assert(left <= right);
-    assert(left < strlen(src));   /* [left means must be smaller */
-    assert(right <= strlen(src)); /* right) means can be equal or smaller */
 
     dest = xmalloc(right - left + 1);
     memcpy(dest, src+left, right-left);
@@ -1852,7 +1850,6 @@ static void parse_range_field(struct connection *conn) {
 static int parse_request(struct connection *conn) {
     size_t bound1, bound2;
     char *tmp;
-    assert(conn->request_length == strlen(conn->request));
 
     /* parse method */
     for (bound1 = 0;
@@ -1879,9 +1876,12 @@ static int parse_request(struct connection *conn) {
         (conn->request[bound2] != ' ') &&
         (conn->request[bound2] != '\r') &&
         (conn->request[bound2] != '\n');
-        bound2++)
-            ;
-
+        bound2++) {
+        if (conn->request[bound2] == '\0') {
+            /* don't allow ascii nul in URL */
+            return 0;
+        }
+    }
     conn->url = split_string(conn->request, bound1, bound2);
 
     /* parse protocol to determine conn_close */
