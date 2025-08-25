@@ -74,7 +74,7 @@ static const int debug = 1;
 /* The time formatting that we use in directory listings.                    */
 /* An example of the default is 2013-09-09 13:01, which should be compatible */
 /* with xbmc/kodi.                                                           */
-#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %R"
+#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %H%M"
 #define DIR_LIST_MTIME_SIZE 16 + 1 /* How large the buffer will need to be. */
 
 /* This is for non-root chroot support on FreeBSD 14.0+ */
@@ -1020,7 +1020,7 @@ static char *base64_encode(char *str) {
     int input_length = strlen(str);
     int output_length = 4 * ((input_length + 2) / 3);
 
-    char *encoded_data = malloc(output_length+1);
+    char *encoded_data = xmalloc(output_length+1);
     if (encoded_data == NULL) return NULL;
 
     int i;
@@ -1372,9 +1372,8 @@ static void logencode(const char *src, char *dest) {
 #define CLF_DATE_LEN 29 /* strlen("[10/Oct/2000:13:55:36 -0700]")+1 */
 static char *clf_date(char *dest, const time_t when) {
     time_t when_copy = when;
-    struct tm tm;
-    localtime_r(&when_copy, &tm);
-    if (strftime(dest, CLF_DATE_LEN, "[%d/%b/%Y:%H:%M:%S %z]", &tm) == 0) {
+    if (strftime(dest, CLF_DATE_LEN,
+                 "[%d/%b/%Y:%H:%M:%S %z]", localtime(&when_copy)) == 0) {
         dest[0] = 0;
     }
     return dest;
@@ -2074,7 +2073,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
     char date[DATE_LEN], *spaces;
     struct dlent **list;
     ssize_t listsize;
-    size_t maxlen = 3; /* There has to be ".." */
+    size_t maxlen = 0;
     int i;
     struct apbuf *listing;
 
@@ -2123,7 +2122,8 @@ static void generate_dir_listing(struct connection *conn, const char *path,
          * the url would be three times its original length.
          */
         char safe_url[MAXNAMLEN*3 + 1];
-
+        char buf[DIR_LIST_MTIME_SIZE];
+        
         urlencode(list[i]->name, safe_url);
 
         append(listing, "<a href=\"");
@@ -2134,10 +2134,8 @@ static void generate_dir_listing(struct connection *conn, const char *path,
         append_escaped(listing, list[i]->name);
         append(listing, "</a>");
 
-        char buf[DIR_LIST_MTIME_SIZE];
-        struct tm tm;
-        localtime_r(&list[i]->mtime.tv_sec, &tm);
-        strftime(buf, sizeof buf, DIR_LIST_MTIME_FORMAT, &tm);
+        strftime(buf, DIR_LIST_MTIME_SIZE,
+                 DIR_LIST_MTIME_FORMAT, localtime(&list[i]->mtime.tv_sec));
 
         if (list[i]->is_dir) {
             append(listing, "/");
