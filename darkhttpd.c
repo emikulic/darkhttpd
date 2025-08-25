@@ -1088,7 +1088,7 @@ static void parse_commandline(const int argc, char *argv[]) {
     if (getuid() == 0)
         bindport = 80;
 
-    custom_hdrs = strdup("");
+    custom_hdrs = xstrdup("");
 
     wwwroot = xstrdup(argv[1]);
     /* Strip ending slash. */
