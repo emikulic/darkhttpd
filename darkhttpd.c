@@ -74,7 +74,7 @@ static const int debug = 1;
 /* The time formatting that we use in directory listings.                    */
 /* An example of the default is 2013-09-09 13:01, which should be compatible */
 /* with xbmc/kodi.                                                           */
-#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %H%M"
+#define DIR_LIST_MTIME_FORMAT "%Y-%m-%d %H:%M"
 #define DIR_LIST_MTIME_SIZE 16 + 1 /* How large the buffer will need to be. */
 
 /* This is for non-root chroot support on FreeBSD 14.0+ */
