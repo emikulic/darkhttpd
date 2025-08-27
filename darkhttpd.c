@@ -1936,10 +1936,10 @@ static int file_exists(const char *path) {
 }
 
 struct dlent {
-    char *name;            /* The name/path of the entry.                 */
-    int is_dir;            /* If the entry is a directory and not a file. */
-    off_t size;            /* The size of the entry, in bytes.            */
-    struct timespec mtime; /* When the file was last modified.            */
+    char *name;   /* The name/path of the entry.                 */
+    int is_dir;   /* If the entry is a directory and not a file. */
+    off_t size;   /* The size of the entry, in bytes.            */
+    time_t mtime; /* When the file was last modified.            */
 };
 
 static int dlent_cmp(const void *a, const void *b) {
@@ -1985,7 +1985,7 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
         list[entries]->name = xstrdup(ent->d_name);
         list[entries]->is_dir = S_ISDIR(s.st_mode);
         list[entries]->size = s.st_size;
-        list[entries]->mtime = s.st_mtim;
+        list[entries]->mtime = s.st_mtim.tv_sec;
         entries++;
     }
     closedir(dir);
@@ -2135,7 +2135,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
         append(listing, "</a>");
 
         strftime(buf, DIR_LIST_MTIME_SIZE,
-                 DIR_LIST_MTIME_FORMAT, localtime(&list[i]->mtime.tv_sec));
+                 DIR_LIST_MTIME_FORMAT, localtime(&list[i]->mtime));
 
         if (list[i]->is_dir) {
             append(listing, "/");
