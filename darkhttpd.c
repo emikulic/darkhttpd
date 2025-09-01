@@ -368,7 +368,7 @@ static const char *default_extension_map[] = {
     "image/webp"           " webp",
     "text/css"             " css",
     "text/html"            " html htm",
-    "text/javascript"      " js",
+    "text/javascript"      " js mjs",
     "text/plain"           " txt asc",
     "video/mpeg"           " mpeg mpe mpg",
     "video/quicktime"      " qt mov",
