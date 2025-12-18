@@ -1,5 +1,10 @@
 all:
-	./run-tests
+	@if [ "$$(id -u)" -eq 0 ]; then \
+		chmod a+w "../devel";       \
+		sudo -u nobody ./run-tests; \
+	else                            \
+		./run-tests;                \
+	fi
 
 clean:
 	rm -f 	*.gcov \
