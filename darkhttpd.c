@@ -1399,11 +1399,36 @@ static char *clf_date(char *dest, const time_t when) {
     return dest;
 }
 
+/* Helper to determine the real client IP.
+ * Returns a malloc'd string of the first element of X-Forwarded-For if the request
+ * comes from the trusted proxy. Returns NULL otherwise.
+ */
+static char *get_forwarded_ip_val(const char *peer_ip, const char *trusted, const char *xff) {
+    const char *end;
+    size_t len;
+    char *ret;
+
+    if (trusted == NULL || xff == NULL || peer_ip == NULL)
+        return NULL;
+
+    if (strcmp(peer_ip, trusted) != 0)
+        return NULL;
+
+    end = strchr(xff, ',');
+    len = (end != NULL) ? (size_t)(end - xff) : strlen(xff);
+
+    ret = xmalloc(len + 1);
+    memcpy(ret, xff, len);
+    ret[len] = '\0';
+    return ret;
+}
+
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
     char *safe_method, *safe_url, *safe_referer, *safe_user_agent,
     dest[CLF_DATE_LEN];
     char *safe_forwarded = NULL;
+    char *forwarded_val;
     const char *log_ip;
 
     if (logfile == NULL)
@@ -1413,20 +1438,14 @@ static void log_connection(const struct connection *conn) {
     if (conn->method == NULL)
         return; /* invalid - didn't parse - maybe too long */
 
-    /* Determine which IP to log */
     log_ip = get_address_text(&conn->client);
-    if (trusted_ip != NULL && conn->forwarded_for != NULL) {
-        if (strcmp(log_ip, trusted_ip) == 0) {
-            /* X-Forwarded-For can be a comma separated list.
-               We want the first IP (the client), not the whole string. */
-            char *end;
-            if ((end = strchr(conn->forwarded_for, ',')) != NULL)
-                *end = '\0';
 
-            safe_forwarded = xmalloc(strlen(conn->forwarded_for) * 3 + 1);
-            logencode(conn->forwarded_for, safe_forwarded);
-            log_ip = safe_forwarded;
-        }
+    forwarded_val = get_forwarded_ip_val(log_ip, trusted_ip, conn->forwarded_for);
+    if (forwarded_val != NULL) {
+        safe_forwarded = xmalloc(strlen(forwarded_val) * 3 + 1);
+        logencode(forwarded_val, safe_forwarded);
+        log_ip = safe_forwarded;
+        free(forwarded_val);
     }
 
 #define make_safe(x) do { \
