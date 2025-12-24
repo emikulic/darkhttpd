@@ -1238,6 +1238,16 @@ static void parse_commandline(const int argc, char *argv[]) {
         else if (strcmp(argv[i], "--trusted-ip") == 0) {
             if (++i >= argc)
                 errx(1, "missing ip after --trusted-ip");
+            struct in_addr a4;
+#ifdef HAVE_INET6
+            struct in6_addr a6;
+            if (inet_pton(AF_INET, argv[i], &a4) != 1 && 
+                inet_pton(AF_INET6, argv[i], &a6) != 1)
+#else
+            if (inet_pton(AF_INET, argv[i], &a4) != 1)
+#endif
+                errx(1, "invalid ip address specified for --trusted-ip: `%s'", argv[i]);
+
             trusted_ip = argv[i];
         }
         else if (strcmp(argv[i], "--forward-https") == 0) {
@@ -1399,36 +1409,11 @@ static char *clf_date(char *dest, const time_t when) {
     return dest;
 }
 
-/* Helper to determine the real client IP.
- * Returns a malloc'd string of the first element of X-Forwarded-For if the request
- * comes from the trusted proxy. Returns NULL otherwise.
- */
-static char *get_forwarded_ip_val(const char *peer_ip, const char *trusted, const char *xff) {
-    const char *end;
-    size_t len;
-    char *ret;
-
-    if (trusted == NULL || xff == NULL || peer_ip == NULL)
-        return NULL;
-
-    if (strcmp(peer_ip, trusted) != 0)
-        return NULL;
-
-    end = strchr(xff, ',');
-    len = (end != NULL) ? (size_t)(end - xff) : strlen(xff);
-
-    ret = xmalloc(len + 1);
-    memcpy(ret, xff, len);
-    ret[len] = '\0';
-    return ret;
-}
-
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
     char *safe_method, *safe_url, *safe_referer, *safe_user_agent,
     dest[CLF_DATE_LEN];
     char *safe_forwarded = NULL;
-    char *forwarded_val;
     const char *log_ip;
 
     if (logfile == NULL)
@@ -1440,12 +1425,19 @@ static void log_connection(const struct connection *conn) {
 
     log_ip = get_address_text(&conn->client);
 
-    forwarded_val = get_forwarded_ip_val(log_ip, trusted_ip, conn->forwarded_for);
-    if (forwarded_val != NULL) {
-        safe_forwarded = xmalloc(strlen(forwarded_val) * 3 + 1);
-        logencode(forwarded_val, safe_forwarded);
+    if (conn->forwarded_for != NULL && strcasecmp(log_ip, trusted_ip) == 0) {
+        /* X-Forwarded-For can be a comma separated list.
+            We want the first IP (the client), not the whole string. */
+        char *comma = strchr(conn->forwarded_for, ',');
+        if (comma != NULL)
+            *comma = '\0';
+
+        safe_forwarded = xmalloc(strlen(conn->forwarded_for) * 3 + 1);
+        logencode(conn->forwarded_for, safe_forwarded);
         log_ip = safe_forwarded;
-        free(forwarded_val);
+
+        if (comma != NULL)
+            *comma = ',';
     }
 
 #define make_safe(x) do { \
@@ -1983,7 +1975,8 @@ static int parse_request(struct connection *conn) {
     conn->referer = parse_field(conn, "Referer: ");
     conn->user_agent = parse_field(conn, "User-Agent: ");
     conn->authorization = parse_field(conn, "Authorization: ");
-    conn->forwarded_for = parse_field(conn, "X-Forwarded-For: ");
+    if (trusted_ip != NULL)
+        conn->forwarded_for = parse_field(conn, "X-Forwarded-For: ");
     parse_range_field(conn);
     return 1;
 }
