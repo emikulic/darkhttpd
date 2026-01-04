@@ -68,6 +68,26 @@ runtests() {
   kill $PID
   wait $PID
 
+  echo "===> run --log tests"
+  rm -f test_logging.log
+  ./a.out $DIR --port $PORT --addr $ADDR --log test_logging.log \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  $PYTHON test_log.py || exit 1
+  kill $PID
+  wait $PID
+
+  echo "===> run --trusted-ip tests"
+  rm -f test_xff.log
+  ./a.out $DIR --port $PORT --addr $ADDR --log test_xff.log --trusted-ip $ADDR \
+    >>test.out.stdout 2>>test.out.stderr &
+  PID=$!
+  kill -0 $PID || exit 1
+  $PYTHON test_log_xff.py || exit 1
+  kill $PID
+  wait $PID
+
   echo "===> run --forward tests"
   ./a.out $DIR --port $PORT --addr $ADDR \
     --forward example.com http://www.example.com \
