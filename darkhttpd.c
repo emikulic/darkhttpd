@@ -1435,9 +1435,6 @@ static void log_connection(const struct connection *conn) {
         safe_forwarded = xmalloc(strlen(conn->forwarded_for) * 3 + 1);
         logencode(conn->forwarded_for, safe_forwarded);
         log_ip = safe_forwarded;
-
-        if (comma != NULL)
-            *comma = ',';
     }
 
 #define make_safe(x) do { \
