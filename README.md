@@ -28,6 +28,7 @@ Features:
 * ISC license.
 * suckless.org says [darkhttpd sucks less](http://suckless.org/rocks/).
 * Small Docker image (<100KB)
+* Partial [human-readable proxy protocol v1](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) support.
 
 Security:
 
