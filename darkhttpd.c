@@ -337,6 +337,7 @@ static char *trusted_ip = NULL;     /* Address of a trusted reverse proxy */
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 static int syslog_enabled = 0;
+static int proxy_protocol = 0;
 volatile int running = 0; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
@@ -1011,6 +1012,9 @@ static void usage(const char *argv0) {
     printf("\t--trusted-ip ip\n"
     "\t\tIf the request comes from this IP, the X-Forwarded-For header\n"
     "\t\tcontent is used in the log instead of the connection peer IP.\n\n");
+    printf("\t--proxy-protocol\n"
+    "\t\tEnables the proxy protocol, which is useful for calls received\n"
+    "\t\by stunnel(for example) to obtain the IP address of the remote client.\n\n");    
     printf("\t--header 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
@@ -1252,6 +1256,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--forward-https") == 0) {
             forward_to_https = 1;
+        }
+        else if (strcmp(argv[i], "--proxy-protocol") == 0) {
+            proxy_protocol = 1;
         }
         else if (strcmp(argv[i], "--header") == 0) {
             if (++i >= argc)
@@ -1891,26 +1898,82 @@ static void parse_range_field(struct connection *conn) {
     free(range);
 }
 
-/* Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
- * url (/), the referer (if given) and the user-agent (if given).  Remember to
- * deallocate all these buffers.  The method will be returned in uppercase.
- */
-static int parse_request(struct connection *conn) {
+static int parse_proxy_protocol_v1(struct connection *conn) {
     size_t bound1, bound2;
-    char *tmp;
+    char *protocol;
 
-    /* parse method */
-    for (bound1 = 0;
+    /* parse proxy protocol */
+    for (bound1 = 6;
         (bound1 < conn->request_length) &&
         (conn->request[bound1] != ' ');
         bound1++)
             ;
 
-    conn->method = split_string(conn->request, 0, bound1);
-    strntoupper(conn->method, bound1);
+    protocol = split_string(conn->request, 6, bound1);
+
+    /* parse source ip */
+    for (bound2 = ++bound1;
+        (bound2 < conn->request_length) &&
+        (conn->request[bound2] != ' ');
+        bound2++)
+            ;
+
+    if (strcmp(protocol, "TCP4") == 0) {
+#ifdef HAVE_INET6
+        if (inet6) {
+            return -1;
+        }
+#endif
+        inet_pton(AF_INET, split_string(conn->request, bound1, bound2), &conn->client);
+    }
+
+    if (strcmp(protocol, "TCP6") == 0) {
+#ifdef HAVE_INET6
+        if (inet6) {
+            inet_pton(AF_INET6, split_string(conn->request, bound1, bound2), &conn->client);
+        }
+#else
+        return -1;
+#endif
+    }
+
+    /* ignore rest of the line */
+    for (;
+        (bound1 < conn->request_length) &&
+        !(conn->request[bound1] == '\r' && conn->request[bound1+1] == '\n');
+        bound1++)
+            ;
+
+    return bound1 + 2;
+}
+
+/* Parse an HTTP request like "GET / HTTP/1.1" to get the method (GET), the
+ * url (/), the referer (if given) and the user-agent (if given).  Remember to
+ * deallocate all these buffers.  The method will be returned in uppercase.
+ */
+static int parse_request(struct connection *conn) {
+    size_t bound1 = 0, bound2;
+    char *tmp;
+
+    /* search for proxy protocol v1 header (if enabled) */
+    if (proxy_protocol && strncmp(conn->request, "PROXY TCP", 7) == 0) {
+        if ((bound1 = parse_proxy_protocol_v1(conn)) < 0) {
+            return -1;
+        }
+    }
+
+    /* parse method */
+    for (bound2 = bound1;
+        (bound2 < conn->request_length) &&
+        (conn->request[bound2] != ' ');
+        bound2++)
+            ;
+
+    conn->method = split_string(conn->request, bound1, bound2);
+    strntoupper(conn->method, bound2 - bound1);
 
     /* parse url */
-    for (;
+    for (bound1 = bound2 + 1 ;
         (bound1 < conn->request_length) &&
         (conn->request[bound1] == ' ');
         bound1++)
