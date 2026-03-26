@@ -18,7 +18,7 @@
  */
 
 static const char
-    pkgname[]   = "darkhttpd/1.17.from.git",
+    pkgname[]   = "suckmore-darkhttpd/1.17.from.git",
     copyright[] = "copyright (c) 2003-2025 Emil Mikulic";
 
 /* Possible build options: -DDEBUG -DNO_IPV6 */
@@ -329,7 +329,7 @@ static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1, want_single_file = 0,
-           want_hide_dotfiles = 0;
+           want_hide_dotfiles = 0, want_human_sizes = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
@@ -647,8 +647,8 @@ static void parse_mimetype_line(const char *line) {
     /* parse mimetype */
     for (pad=0; (line[pad] == ' ') || (line[pad] == '\t'); pad++)
         ;
-    if (line[pad] == '\0' || /* empty line */
-        line[pad] == '#')    /* comment */
+    /* skip empty lines and comments */
+    if (line[pad] == '\0' || line[pad] == '#')
         return;
 
     for (bound1=pad+1;
@@ -938,80 +938,83 @@ static void init_sockin(void) {
 
 static void usage(const char *argv0) {
     printf("usage:\t%s /path/to/wwwroot [flags]\n\n", argv0);
-    printf("flags:\t--port number (default: %u, or 80 if running as root)\n"
+    printf("flags:\t--port / -p number (default: %u, or 80 if running as root)\n"
     "\t\tSpecifies which port to listen on for connections.\n"
     "\t\tPass 0 to let the system choose any free port for you.\n\n", bindport);
-    printf("\t--addr ip (default: all)\n"
+    printf("\t--addr / -a ip (default: all)\n"
     "\t\tIf multiple interfaces are present, specifies\n"
     "\t\twhich one to bind the listening port to.\n\n");
 #ifdef HAVE_INET6
-    printf("\t--ipv6\n"
+    printf("\t--ipv6 / -6\n"
     "\t\tListen on IPv6 address.\n\n");
 #endif
-    printf("\t--daemon (default: don't daemonize)\n"
+    printf("\t--daemon / -d (default: don't daemonize)\n"
     "\t\tDetach from the controlling terminal and run in the background.\n\n");
-    printf("\t--pidfile filename (default: no pidfile)\n"
+    printf("\t--pidfile / -P filename (default: no pidfile)\n"
     "\t\tWrite PID to the specified file. Note that if you are\n"
     "\t\tusing --chroot, then the pidfile must be relative to,\n"
     "\t\tand inside the wwwroot.\n\n");
-    printf("\t--maxconn number (default: system maximum)\n"
+    printf("\t--maxconn / -m number (default: system maximum)\n"
     "\t\tSpecifies how many concurrent connections to accept.\n\n");
-    printf("\t--log filename (default: stdout)\n"
+    printf("\t--log / -l filename (default: stdout)\n"
     "\t\tSpecifies which file to append the request log to.\n\n");
-    printf("\t--syslog\n"
+    printf("\t--syslog / -S\n"
     "\t\tUse syslog for request log.\n\n");
-    printf("\t--index filename (default: %s)\n"
+    printf("\t--index / -i filename (default: %s)\n"
     "\t\tDefault file to serve when a directory is requested.\n\n",
         index_name);
-    printf("\t--no-listing\n"
+    printf("\t--no-listing / -n\n"
     "\t\tDo not serve listing if directory is requested.\n\n");
-    printf("\t--mimetypes filename (optional)\n"
+    printf("\t--mimetypes / -M filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n\n");
-    printf("\t--default-mimetype string (optional, default: %s)\n"
+    printf("\t--default-mimetype / -T string (optional, default: %s)\n"
     "\t\tFiles with unknown extensions are served as this mimetype.\n\n",
         octet_stream);
-    printf("\t--uid uid/uname, --gid gid/gname (default: don't privdrop)\n"
+    printf("\t--uid / -u uid/uname, --gid / -g gid/gname (default: don't privdrop)\n"
     "\t\tDrops privileges to given uid:gid after initialization.\n\n");
-    printf("\t--chroot (default: don't chroot)\n"
+    printf("\t--chroot / -C (default: don't chroot)\n"
     "\t\tLocks server into wwwroot directory for added security.\n\n");
 #ifdef __FreeBSD__
-    printf("\t--accf (default: don't use acceptfilter)\n"
+    printf("\t--accf / -A (default: don't use acceptfilter)\n"
     "\t\tUse acceptfilter. Needs the accf_http kernel module loaded.\n\n");
 #endif
-    printf("\t--no-keepalive\n"
+    printf("\t--no-keepalive / -k\n"
     "\t\tDisables HTTP Keep-Alive functionality.\n\n");
-    printf("\t--single-file\n"
+    printf("\t--single-file / -1\n"
     "\t\tOnly serve a single file provided as /path/to/file instead\n"
     "\t\tof a whole directory.\n\n");
-    printf("\t--hide-dotfiles\n"
+    printf("\t--hide-dotfiles / -D\n"
     "\t\tDon't serve dotfiles.\n\n");
-    printf("\t--forward host url (default: don't forward)\n"
+    printf("\t--human-readable / -h\n"
+    "\t\tShow file sizes in human-readable format (e.g. 1.4 MB)\n"
+    "\t\tinstead of raw bytes in directory listings.\n\n");
+    printf("\t--forward / -f host url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tRequests to the host are redirected to the corresponding url.\n"
     "\t\tThe option may be specified multiple times, in which case\n"
     "\t\tthe host is matched in order of appearance.\n\n");
-    printf("\t--forward-all url (default: don't forward)\n"
+    printf("\t--forward-all / -F url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tAll requests are redirected to the corresponding url.\n\n");
-    printf("\t--forward-https\n"
+    printf("\t--forward-https / -s\n"
     "\t\tIf the client requested HTTP, forward to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
     "\t\tthat supports SSL.\n\n");
-    printf("\t--no-server-id\n"
+    printf("\t--no-server-id / -N\n"
     "\t\tDon't identify the server type in headers\n"
     "\t\tor directory listings.\n\n");
-    printf("\t--timeout secs (default: %d)\n"
+    printf("\t--timeout / -t secs (default: %d)\n"
     "\t\tIf a connection is idle for more than this many seconds,\n"
     "\t\tit will be closed. Set to zero to disable timeouts.\n\n",
     timeout_secs);
-    printf("\t--auth username:password\n"
+    printf("\t--auth / -B username:password\n"
     "\t\tEnable basic authentication. This is *INSECURE*: passwords\n"
     "\t\tare sent unencrypted over HTTP, plus the password is visible\n"
     "\t\tin ps(1) to other users on the system.\n\n");
-    printf("\t--trusted-ip ip\n"
+    printf("\t--trusted-ip / -X ip\n"
     "\t\tIf the request comes from this IP, the X-Forwarded-For header\n"
     "\t\tcontent is used in the log instead of the connection peer IP.\n\n");
-    printf("\t--header 'Header: Value'\n"
+    printf("\t--header / -H 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
     "\t\tthe headers are added in order of appearance.\n\n");
@@ -1113,56 +1116,60 @@ static void parse_commandline(const int argc, char *argv[]) {
         if (wwwroot[len - 1] == '/')
             wwwroot[len - 1] = '\0';
 
+/* Convenience macro: match a long flag and its short equivalent. */
+#define FLAG(lng, shrt) \
+    (strcmp(argv[i], (lng)) == 0 || strcmp(argv[i], (shrt)) == 0)
+
     /* walk through the remainder of the arguments (if any) */
     for (i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--port") == 0) {
+        if (FLAG("--port", "-p")) {
             if (++i >= argc)
-                errx(1, "missing number after --port");
+                errx(1, "missing number after --port / -p");
             bindport = (uint16_t)xstr_to_num(argv[i]);
         }
-        else if (strcmp(argv[i], "--addr") == 0) {
+        else if (FLAG("--addr", "-a")) {
             if (++i >= argc)
-                errx(1, "missing ip after --addr");
+                errx(1, "missing ip after --addr / -a");
             bindaddr = argv[i];
         }
-        else if (strcmp(argv[i], "--maxconn") == 0) {
+        else if (FLAG("--maxconn", "-m")) {
             if (++i >= argc)
-                errx(1, "missing number after --maxconn");
+                errx(1, "missing number after --maxconn / -m");
             max_connections = (int)xstr_to_num(argv[i]);
         }
-        else if (strcmp(argv[i], "--log") == 0) {
+        else if (FLAG("--log", "-l")) {
             if (++i >= argc)
-                errx(1, "missing filename after --log");
+                errx(1, "missing filename after --log / -l");
             logfile_name = argv[i];
         }
-        else if (strcmp(argv[i], "--chroot") == 0) {
+        else if (FLAG("--chroot", "-C")) {
             want_chroot = 1;
         }
-        else if (strcmp(argv[i], "--daemon") == 0) {
+        else if (FLAG("--daemon", "-d")) {
             want_daemon = 1;
         }
-        else if (strcmp(argv[i], "--index") == 0) {
+        else if (FLAG("--index", "-i")) {
             if (++i >= argc)
-                errx(1, "missing filename after --index");
+                errx(1, "missing filename after --index / -i");
             index_name = argv[i];
         }
-        else if (strcmp(argv[i], "--no-listing") == 0) {
+        else if (FLAG("--no-listing", "-n")) {
             no_listing = 1;
         }
-        else if (strcmp(argv[i], "--mimetypes") == 0) {
+        else if (FLAG("--mimetypes", "-M")) {
             if (++i >= argc)
-                errx(1, "missing filename after --mimetypes");
+                errx(1, "missing filename after --mimetypes / -M");
             parse_extension_map_file(argv[i]);
         }
-        else if (strcmp(argv[i], "--default-mimetype") == 0) {
+        else if (FLAG("--default-mimetype", "-T")) {
             if (++i >= argc)
-                errx(1, "missing string after --default-mimetype");
+                errx(1, "missing string after --default-mimetype / -T");
             default_mimetype = argv[i];
         }
-        else if (strcmp(argv[i], "--uid") == 0) {
+        else if (FLAG("--uid", "-u")) {
             struct passwd *p;
             if (++i >= argc)
-                errx(1, "missing uid after --uid");
+                errx(1, "missing uid after --uid / -u");
             p = getpwnam(argv[i]);
             if (!p) {
                 p = getpwuid((uid_t)xstr_to_num(argv[i]));
@@ -1171,10 +1178,10 @@ static void parse_commandline(const int argc, char *argv[]) {
                 errx(1, "no such uid: `%s'", argv[i]);
             drop_uid = p->pw_uid;
         }
-        else if (strcmp(argv[i], "--gid") == 0) {
+        else if (FLAG("--gid", "-g")) {
             struct group *g;
             if (++i >= argc)
-                errx(1, "missing gid after --gid");
+                errx(1, "missing gid after --gid / -g");
             g = getgrnam(argv[i]);
             if (!g) {
                 g = getgrgid((gid_t)xstr_to_num(argv[i]));
@@ -1184,60 +1191,63 @@ static void parse_commandline(const int argc, char *argv[]) {
             }
             drop_gid = g->gr_gid;
         }
-        else if (strcmp(argv[i], "--pidfile") == 0) {
+        else if (FLAG("--pidfile", "-P")) {
             if (++i >= argc)
-                errx(1, "missing filename after --pidfile");
+                errx(1, "missing filename after --pidfile / -P");
             pidfile_name = argv[i];
         }
-        else if (strcmp(argv[i], "--no-keepalive") == 0) {
+        else if (FLAG("--no-keepalive", "-k")) {
             want_keepalive = 0;
         }
-        else if (strcmp(argv[i], "--accf") == 0) {
+        else if (FLAG("--accf", "-A")) {
             want_accf = 1;
         }
-        else if (strcmp(argv[i], "--syslog") == 0) {
+        else if (FLAG("--syslog", "-S")) {
             syslog_enabled = 1;
         }
-        else if (strcmp(argv[i], "--single-file") == 0) {
+        else if (FLAG("--single-file", "-1")) {
             want_single_file = 1;
         }
-        else if (strcmp(argv[i], "--hide-dotfiles") == 0) {
+        else if (FLAG("--hide-dotfiles", "-D")) {
             want_hide_dotfiles = 1;
         }
-        else if (strcmp(argv[i], "--forward") == 0) {
+        else if (FLAG("--human-readable", "-h")) {
+            want_human_sizes = 1;
+        }
+        else if (FLAG("--forward", "-f")) {
             const char *host, *url;
             if (++i >= argc)
-                errx(1, "missing host after --forward");
+                errx(1, "missing host after --forward / -f");
             host = argv[i];
             if (++i >= argc)
-                errx(1, "missing url after --forward");
+                errx(1, "missing url after --forward / -f");
             url = argv[i];
             add_forward_mapping(host, url);
         }
-        else if (strcmp(argv[i], "--forward-all") == 0) {
+        else if (FLAG("--forward-all", "-F")) {
             if (++i >= argc)
-                errx(1, "missing url after --forward-all");
+                errx(1, "missing url after --forward-all / -F");
             forward_all_url = argv[i];
         }
-        else if (strcmp(argv[i], "--no-server-id") == 0) {
+        else if (FLAG("--no-server-id", "-N")) {
             want_server_id = 0;
         }
-        else if (strcmp(argv[i], "--timeout") == 0) {
+        else if (FLAG("--timeout", "-t")) {
             if (++i >= argc)
-                errx(1, "missing number after --timeout");
+                errx(1, "missing number after --timeout / -t");
             timeout_secs = (int)xstr_to_num(argv[i]);
         }
-        else if (strcmp(argv[i], "--auth") == 0) {
+        else if (FLAG("--auth", "-B")) {
             if (++i >= argc || strchr(argv[i], ':') == NULL)
-                errx(1, "missing 'user:pass' after --auth");
+                errx(1, "missing 'user:pass' after --auth / -B");
 
             char *key = base64_encode(argv[i]);
             xasprintf(&auth_key, "Basic %s", key);
             free(key);
         }
-        else if (strcmp(argv[i], "--trusted-ip") == 0) {
+        else if (FLAG("--trusted-ip", "-X")) {
             if (++i >= argc)
-                errx(1, "missing ip after --trusted-ip");
+                errx(1, "missing ip after --trusted-ip / -X");
             struct in_addr a4;
 #ifdef HAVE_INET6
             struct in6_addr a6;
@@ -1250,12 +1260,12 @@ static void parse_commandline(const int argc, char *argv[]) {
 
             trusted_ip = argv[i];
         }
-        else if (strcmp(argv[i], "--forward-https") == 0) {
+        else if (FLAG("--forward-https", "-s")) {
             forward_to_https = 1;
         }
-        else if (strcmp(argv[i], "--header") == 0) {
+        else if (FLAG("--header", "-H")) {
             if (++i >= argc)
-                errx(1, "missing argument after --header");
+                errx(1, "missing argument after --header / -H");
             if (strchr(argv[i], '\n') != NULL || strstr(argv[i], ": ") == NULL)
                 errx(1, "malformed argument after --header");
             char *old_custom_hdrs = custom_hdrs;
@@ -1263,7 +1273,7 @@ static void parse_commandline(const int argc, char *argv[]) {
             free(old_custom_hdrs);
         }
 #ifdef HAVE_INET6
-        else if (strcmp(argv[i], "--ipv6") == 0) {
+        else if (FLAG("--ipv6", "-6")) {
             inet6 = 1;
         }
 #endif
@@ -2119,6 +2129,18 @@ static void append_escaped(struct apbuf *dst, const char *src) {
     }
 }
 
+/* Format a file size as a human-readable string (e.g. "1.4 MB"). */
+static void human_size(off_t bytes, char *buf, size_t buflen) {
+    static const char *units[] = { "B", "KB", "MB", "GB", "TB", "PB" };
+    double val = (double)bytes;
+    int u = 0;
+    while (val >= 1024.0 && u < 5) { val /= 1024.0; u++; }
+    if (u == 0)
+        snprintf(buf, buflen, "%llu B", llu(bytes));
+    else
+        snprintf(buf, buflen, "%.1f %s", val, units[u]);
+}
+
 static void generate_dir_listing(struct connection *conn, const char *path,
         const char *decoded_url) {
     char date[DATE_LEN], *spaces;
@@ -2198,7 +2220,13 @@ static void generate_dir_listing(struct connection *conn, const char *path,
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
             append(listing, " ");
             append(listing, buf);
-            appendf(listing, " %10llu\n", llu(list[i]->size));
+            if (want_human_sizes) {
+                char szstr[16];
+                human_size(list[i]->size, szstr, sizeof(szstr));
+                appendf(listing, " %10s\n", szstr);
+            } else {
+                appendf(listing, " %10llu\n", llu(list[i]->size));
+            }
         }
     }
 
