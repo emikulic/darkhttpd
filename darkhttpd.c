@@ -1368,11 +1368,22 @@ static void accept_connection(void) {
     }
     LIST_INSERT_HEAD(&connlist, conn, entries);
 
-    if (debug)
-        printf("accepted connection from %s:%u (fd %d)\n",
-               inet_ntoa(addrin.sin_addr),
-               ntohs(addrin.sin_port),
-               conn->socket);
+    if (debug) {
+#ifdef HAVE_INET6
+        if (inet6) {
+            printf("accepted connection from [%s]:%u (fd %d)\n",
+                   get_address_text(&addrin6.sin6_addr),
+                   ntohs(addrin6.sin6_port),
+                   conn->socket);
+        } else
+#endif
+        {
+            printf("accepted connection from %s:%u (fd %d)\n",
+                   inet_ntoa(addrin.sin_addr),
+                   ntohs(addrin.sin_port),
+                   conn->socket);
+        }
+    }
 
     /* Try to read straight away rather than going through another iteration
      * of the select() loop.
