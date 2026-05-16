@@ -1958,14 +1958,21 @@ static int parse_request(struct connection *conn) {
         for (bound2 = bound1 + 1;
             (bound2 < conn->request_length) &&
             (conn->request[bound2] != ' ') &&
-            (conn->request[bound2] != '\r');
+            (conn->request[bound2] != '\r') &&
+            (conn->request[bound2] != '\n');
             bound2++)
                 ;
 
         proto = split_string(conn->request, bound1, bound2);
         if (strcasecmp(proto, "HTTP/1.1") == 0)
             conn->conn_close = 0;
+        else if (strcasecmp(proto, "HTTP/1.0") != 0) {
+            free(proto);
+            return 0; /* unknown version or literal space in request-target */
+        }
         free(proto);
+        if (conn->request[bound2] != '\r' && conn->request[bound2] != '\n')
+            return 0; /* extra tokens after HTTP version */
     }
 
     /* parse connection field */
@@ -2533,6 +2540,7 @@ static void process_request(struct connection *conn) {
     num_requests++;
 
     if (!parse_request(conn)) {
+        conn->conn_close = 1;
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
     }
