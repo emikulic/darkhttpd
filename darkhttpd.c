@@ -612,12 +612,13 @@ static void add_mime_mapping(const char *extension, const char *mimetype) {
         longest_ext = i;
 
     /* look through list and replace an existing entry if possible */
-    for (i = 0; i < mime_map_size; i++)
-        if (strcmp(mime_map[i].extension, extension) == 0) {
+    for (i = 0; i < mime_map_size; i++) {
+        if (strcasecmp(mime_map[i].extension, extension) == 0) {
             free(mime_map[i].mimetype);
             mime_map[i].mimetype = xstrdup(mimetype);
             return;
         }
+    }
 
     /* no replacement - add a new entry */
     mime_map_size++;
@@ -631,8 +632,8 @@ static void add_mime_mapping(const char *extension, const char *mimetype) {
  * binary-searched.
  */
 static int mime_mapping_cmp(const void *a, const void *b) {
-    return strcmp(((const struct mime_mapping *)a)->extension,
-                  ((const struct mime_mapping *)b)->extension);
+    return strcasecmp(((const struct mime_mapping *)a)->extension,
+                      ((const struct mime_mapping *)b)->extension);
 }
 
 static void sort_mime_map(void) {
@@ -777,8 +778,8 @@ static void parse_extension_map_file(const char *filename) {
  * bsearch()es mime_map, so make sure it's sorted first.
  */
 static int mime_mapping_cmp_str(const void *a, const void *b) {
-    return strcmp((const char *)a,
-                 ((const struct mime_mapping *)b)->extension);
+    return strcasecmp((const char *)a,
+                      ((const struct mime_mapping *)b)->extension);
 }
 
 static const char *url_content_type(const char *url) {
@@ -795,7 +796,7 @@ static const char *url_content_type(const char *url) {
             bsearch((url + period + 1), mime_map, mime_map_size,
                     sizeof(struct mime_mapping), mime_mapping_cmp_str);
         if (result != NULL) {
-            assert(strcmp(url + period + 1, result->extension) == 0);
+            assert(strcasecmp(url + period + 1, result->extension) == 0);
             return result->mimetype;
         }
     }
