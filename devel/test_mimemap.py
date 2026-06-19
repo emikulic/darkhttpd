@@ -10,7 +10,7 @@ class TestMimemap(TestHelper):
         self.datalen = len(self.data)
         self.files = [ ("test-file.a1",    "test/type1"),
                        ("test-file.ap2",   "test/type2"),
-                       ("test-file.app3",  "test/type3"),
+                       ("test-file.APP3",  "test/type3"),
                        ("test-file.appp4", "test/default") ]
         for fn, _ in self.files:
             with open(WWWROOT + "/" + fn, 'wb') as f:
