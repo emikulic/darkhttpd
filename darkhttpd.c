@@ -330,11 +330,10 @@ static FILE *logfile = NULL;
 static char *pidfile_name = NULL;   /* NULL = no pidfile */
 static int want_chroot = 0, want_daemon = 0, want_accf = 0,
            want_keepalive = 1, want_server_id = 1, want_single_file = 0,
-           want_hide_dotfiles = 0;
+           want_hide_dotfiles = 0, want_log_forwarded_for = 0;
 static char *server_hdr = NULL;
 static char *auth_key = NULL;       /* NULL or "Basic base64_of_password" */
 static char *custom_hdrs = NULL;
-static char *trusted_ip = NULL;     /* Address of a trusted reverse proxy */
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 static int syslog_enabled = 0;
@@ -1013,9 +1012,9 @@ static void usage(const char *argv0) {
     "\t\tEnable basic authentication. This is *INSECURE*: passwords\n"
     "\t\tare sent unencrypted over HTTP, plus the password is visible\n"
     "\t\tin ps(1) to other users on the system.\n\n");
-    printf("\t--trusted-ip ip\n"
-    "\t\tIf the request comes from this IP, the X-Forwarded-For header\n"
-    "\t\tcontent is used in the log instead of the connection peer IP.\n\n");
+    printf("\t--log-forwarded-for\n"
+    "\t\tUse the first value from the X-Forwarded-For header in the\n"
+    "\t\trequest log instead of the connection peer IP.\n\n");
     printf("\t--header 'Header: Value'\n"
     "\t\tAdd a custom header to all responses.\n"
     "\t\tThis option can be specified multiple times, in which case\n"
@@ -1245,20 +1244,8 @@ static void parse_commandline(const int argc, char *argv[]) {
             xasprintf(&auth_key, "Basic %s", key);
             free(key);
         }
-        else if (strcmp(argv[i], "--trusted-ip") == 0) {
-            if (++i >= argc)
-                errx(1, "missing ip after --trusted-ip");
-            struct in_addr a4;
-#ifdef HAVE_INET6
-            struct in6_addr a6;
-            if (inet_pton(AF_INET, argv[i], &a4) != 1 && 
-                inet_pton(AF_INET6, argv[i], &a6) != 1)
-#else
-            if (inet_pton(AF_INET, argv[i], &a4) != 1)
-#endif
-                errx(1, "invalid ip address specified for --trusted-ip: `%s'", argv[i]);
-
-            trusted_ip = argv[i];
+        else if (strcmp(argv[i], "--log-forwarded-for") == 0) {
+            want_log_forwarded_for = 1;
         }
         else if (strcmp(argv[i], "--forward-https") == 0) {
             forward_to_https = 1;
@@ -1433,8 +1420,7 @@ static char *clf_date(char *dest, const time_t when) {
 /* Add a connection's details to the logfile. */
 static void log_connection(const struct connection *conn) {
     char *safe_method, *safe_url, *safe_referer, *safe_user_agent,
-    dest[CLF_DATE_LEN];
-    char *safe_forwarded = NULL;
+         *safe_forwarded_for, dest[CLF_DATE_LEN];
     const char *log_ip;
 
     if (logfile == NULL)
@@ -1443,20 +1429,6 @@ static void log_connection(const struct connection *conn) {
         return; /* invalid - died in request */
     if (conn->method == NULL)
         return; /* invalid - didn't parse - maybe too long */
-
-    log_ip = get_address_text(&conn->client);
-
-    if (conn->forwarded_for != NULL && strcasecmp(log_ip, trusted_ip) == 0) {
-        /* X-Forwarded-For can be a comma separated list.
-            We want the first IP (the client), not the whole string. */
-        char *comma = strchr(conn->forwarded_for, ',');
-        if (comma != NULL)
-            *comma = '\0';
-
-        safe_forwarded = xmalloc(strlen(conn->forwarded_for) * 3 + 1);
-        logencode(conn->forwarded_for, safe_forwarded);
-        log_ip = safe_forwarded;
-    }
 
 #define make_safe(x) do { \
     if (conn->x) { \
@@ -1467,12 +1439,21 @@ static void log_connection(const struct connection *conn) {
     } \
 } while(0)
 
+#define use_safe(x) safe_##x ? safe_##x : ""
+
+    if (want_log_forwarded_for) {
+        make_safe(forwarded_for);
+        log_ip = use_safe(forwarded_for);
+    } else {
+        safe_forwarded_for = NULL;
+        log_ip = get_address_text(&conn->client);
+    }
+
     make_safe(method);
     make_safe(url);
     make_safe(referer);
     make_safe(user_agent);
 
-#define use_safe(x) safe_##x ? safe_##x : ""
   if (syslog_enabled) {
     syslog(LOG_INFO, "%s - - %s \"%s %s HTTP/1.1\" %d %llu \"%s\" \"%s\"\n",
         log_ip,
@@ -1503,7 +1484,7 @@ static void log_connection(const struct connection *conn) {
     free_safe(url);
     free_safe(referer);
     free_safe(user_agent);
-    if (safe_forwarded != NULL) free(safe_forwarded);
+    free_safe(forwarded_for);
 
 #undef make_safe
 #undef use_safe
@@ -1978,8 +1959,17 @@ static int parse_request(struct connection *conn) {
     conn->referer = parse_field(conn, "\nReferer: ");
     conn->user_agent = parse_field(conn, "\nUser-Agent: ");
     conn->authorization = parse_field(conn, "\nAuthorization: ");
-    if (trusted_ip != NULL)
+    if (want_log_forwarded_for) {
+        /* We select the leftmost value in the first header. Note that this
+         * can be easily spoofed by the client or an intermediary proxy,
+         * therefore it must not be used for anything security related
+         * like access control. We use it only for logging. */
         conn->forwarded_for = parse_field(conn, "\nX-Forwarded-For: ");
+        if (conn->forwarded_for != NULL) {
+            if ((tmp = strchr(conn->forwarded_for, ',')) != NULL)
+                *tmp = '\0';
+        }
+    }
     parse_range_field(conn);
     return 1;
 }
@@ -2213,7 +2203,7 @@ static void generate_dir_listing(struct connection *conn, const char *path,
          */
         char safe_url[MAXNAMLEN*3 + 1];
         char buf[DIR_LIST_MTIME_SIZE];
-        
+
         urlencode(list[i]->name, safe_url);
 
         append(listing, "<a href=\"");

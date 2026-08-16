@@ -79,9 +79,9 @@ runtests() {
   kill $PID
   wait $PID
 
-  echo "===> run --trusted-ip tests"
+  echo "===> run --log-forwarded-for tests"
   rm -f test_xff.log
-  ./darkhttpd $DIR --port $PORT --addr $ADDR --log test_xff.log --trusted-ip $ADDR \
+  ./darkhttpd $DIR --port $PORT --addr $ADDR --log test_xff.log --log-forwarded-for \
     >>test.out.stdout 2>>test.out.stderr &
   PID=$!
   kill -0 $PID || exit 1
