@@ -318,6 +318,7 @@ static uint16_t bindport = 8080;    /* or 80 if running as root */
 static int max_connections = -1;    /* kern.ipc.somaxconn */
 static const char *index_name = "index.html";
 static int no_listing = 0;
+static int humanize_sizes = 0;      /* --human-readable */
 
 static int sockin = -1;             /* socket to accept connections from */
 #ifdef HAVE_INET6
@@ -965,6 +966,9 @@ static void usage(const char *argv0) {
         index_name);
     printf("\t--no-listing\n"
     "\t\tDo not serve listing if directory is requested.\n\n");
+    printf("\t--human-readable\n"
+    "\t\tShow file sizes in directory listings as human-readable\n"
+    "\t\t(e.g. 4.2M) instead of exact byte counts.\n\n");
     printf("\t--mimetypes filename (optional)\n"
     "\t\tParses specified file for extension-MIME associations.\n\n");
     printf("\t--default-mimetype string (optional, default: %s)\n"
@@ -1148,6 +1152,9 @@ static void parse_commandline(const int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "--no-listing") == 0) {
             no_listing = 1;
+        }
+        else if (strcmp(argv[i], "--human-readable") == 0) {
+            humanize_sizes = 1;
         }
         else if (strcmp(argv[i], "--mimetypes") == 0) {
             if (++i >= argc)
@@ -2119,6 +2126,30 @@ static void append_escaped(struct apbuf *dst, const char *src) {
     }
 }
 
+/* Format a byte count as a short human-readable string, e.g. "4.2M",
+ * right-padded to roughly the same column width as the raw "%10llu"
+ * byte count it replaces. Not thread-safe (static buffer), but
+ * darkhttpd is single-threaded, so that's fine.
+ */
+static const char *humanize_size(const off_t size) {
+    static char buf[16];
+    static const char suffix[] = " KMGTPE";
+    double val = (double)size;
+    size_t i = 0;
+
+    while (val >= 1024.0 && i < sizeof(suffix) - 2) {
+        val /= 1024.0;
+        i++;
+    }
+
+    if (i == 0)
+        snprintf(buf, sizeof(buf), "%10llu", llu(size));
+    else
+        snprintf(buf, sizeof(buf), "%9.1f%c", val, suffix[i]);
+
+    return buf;
+}
+
 static void generate_dir_listing(struct connection *conn, const char *path,
         const char *decoded_url) {
     char date[DATE_LEN], *spaces;
@@ -2198,7 +2229,10 @@ static void generate_dir_listing(struct connection *conn, const char *path,
             appendl(listing, spaces, maxlen-strlen(list[i]->name));
             append(listing, " ");
             append(listing, buf);
-            appendf(listing, " %10llu\n", llu(list[i]->size));
+            if (humanize_sizes)
+                appendf(listing, " %s\n", humanize_size(list[i]->size));
+            else
+                appendf(listing, " %10llu\n", llu(list[i]->size));
         }
     }
 
