@@ -34,8 +34,8 @@ static const int debug = 0;
 static const int debug = 1;
 #endif
 
+#define _GNU_SOURCE /* for strsignal() and vasprintf() */
 #ifdef __linux
-# define _GNU_SOURCE /* for strsignal() and vasprintf() */
 # define _FILE_OFFSET_BITS 64 /* stat() files bigger than 2GB */
 # include <sys/sendfile.h>
 #endif
