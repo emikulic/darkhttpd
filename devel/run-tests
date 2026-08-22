@@ -224,6 +224,14 @@ if ./test_normalize_path | grep -E '^FAIL:'; then
   exit 1
 fi
 
+echo "===> test_parse_field"
+$CC -g -O2 -fsanitize=address -fsanitize=undefined \
+  test_parse_field.c -o test_parse_field || exit 1
+if ! ./test_parse_field; then
+  echo test_parse_field failed >&2
+  exit 1
+fi
+
 # Check that the code builds with various defines.
 echo "===> building without -DDEBUG"
 $CC -O2 -Wall ../darkhttpd.c || exit 1

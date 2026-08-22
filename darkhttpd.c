@@ -1771,21 +1771,35 @@ static void redirect(struct connection *conn, const char *format, ...) {
 
 /* Parses a single HTTP request field.  Returns string from end of [field] to
  * first \r, \n or end of request string.  Returns NULL if [field] can't be
- * matched.  Case insensitive.
+ * matched.  Case insensitive.  The field must start at the beginning of a
+ * line to avoid header stuffing (using an attacker-controlled header to
+ * inject a bad value for a different header).
  *
  * You need to remember to deallocate the result.
- * example: parse_field(conn, "Referer: ");
+ * Example: parse_field(conn, "Referer: ");
  */
 static char *parse_field(const struct connection *conn, const char *field) {
     size_t bound1, bound2;
-    char *pos;
+    char *pos = NULL;
+    char *ofs = conn->request;
+    int field_len = strlen(field);
 
-    /* find start */
-    pos = strcasestr(conn->request, field);
+    while (ofs + field_len < conn->request + conn->request_length) {
+        /* find field */
+        pos = strcasestr(ofs, field);
+        if (pos == NULL)
+            return NULL;
+
+        /* must be at start of request or start of line */
+        if (pos == ofs || pos[-1] == '\n')
+            break;
+
+        ofs = pos + field_len;
+    }
     if (pos == NULL)
         return NULL;
     assert(pos >= conn->request);
-    bound1 = (size_t)(pos - conn->request) + strlen(field);
+    bound1 = (size_t)(pos - conn->request) + field_len;
 
     /* find end */
     for (bound2 = bound1;
