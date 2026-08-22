@@ -11,6 +11,10 @@ if [ ! -e test.py ]; then
 	echo "fatal: can't find test.py. are you in the right directory?" >&2
 	exit 1
 fi
+if [[ "$(id -u)" = 0 ]]; then
+	echo "fatal: tests cannot be run as root" >&2
+	exit 1
+fi
 if [[ -z "$CC" ]]; then
   CC="$(which gcc)"
 fi
