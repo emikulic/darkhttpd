@@ -434,7 +434,7 @@ static unsigned int xvasprintf(char **ret, const char *format, va_list ap)
     __printflike(2,0);
 static unsigned int xvasprintf(char **ret, const char *format, va_list ap) {
     int len = vasprintf(ret, format, ap);
-    if (ret == NULL || len == -1)
+    if (len == -1)
         errx(1, "out of memory in vasprintf()");
     return (unsigned int)len;
 }
