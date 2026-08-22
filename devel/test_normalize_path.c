@@ -43,6 +43,7 @@ static char const *tests[] = {
     "https://a", "",
     "https://a/", "/",
     "https://a/index.htm", "/index.htm",
+    "https://example.com:12345/index.htm", "/index.htm",
     NULL
 };
 
