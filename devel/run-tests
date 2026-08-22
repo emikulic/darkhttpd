@@ -39,7 +39,7 @@ runtests() {
   chmod 0 $DIR/forbidden || exit 1
   mkdir $DIR/unreadable || exit 1
   chmod 0100 $DIR/unreadable || exit 1
-  rm -f darkhttpd.gcda test.out.log test.out.stdout test.out.stderr
+  rm -f darkhttpd.gcda a-darkhttpd.gcda a-darkhttpd.gcno test.out.log test.out.stdout test.out.stderr
 
   echo "===> run usage statement"
   # Early exit if we can't even survive usage.
@@ -279,6 +279,6 @@ gcov darkhttpd
 chmod 755 $DIR/forbidden
 chmod 755 $DIR/unreadable
 rm -rf $DIR
-rm -f darkhttpd.gcda darkhttpd.gcno a.out
+rm -f darkhttpd.gcda darkhttpd.gcno a-darkhttpd.gcda a-darkhttpd.gcno a.out
 echo "===> PASSED!"
 echo "===> read the report: less darkhttpd.c.gcov"
