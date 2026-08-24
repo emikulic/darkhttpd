@@ -338,7 +338,7 @@ static char *trusted_ip = NULL;     /* Address of a trusted reverse proxy */
 static uint64_t num_requests = 0, total_in = 0, total_out = 0;
 static int accepting = 1;           /* set to 0 to stop accept()ing */
 static int syslog_enabled = 0;
-volatile int running = 0; /* signal handler sets this to false */
+static volatile int running = 0; /* signal handler sets this to false */
 
 #define INVALID_UID ((uid_t) -1)
 #define INVALID_GID ((gid_t) -1)
@@ -2558,7 +2558,7 @@ static void process_get(struct connection *conn) {
  * user_input to avoid leaking the secret's length and contents through timing
  * information.
  */
-int password_equal(const char *user_input, const char *secret) {
+static int password_equal(const char *user_input, const char *secret) {
     size_t i = 0;
     size_t j = 0;
     char out = 0;
