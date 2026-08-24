@@ -2090,6 +2090,8 @@ static int needs_encoding(char c) {
         case '.':
         case '_':
         case '~':
+        /* Allow reserved char '/' so we can urlencode() request URLs. */
+        case '/':
             return 0;
     }
     return 1;
