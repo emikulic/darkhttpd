@@ -1725,15 +1725,54 @@ static void default_reply(struct connection *conn,
     conn->reply_start = 0;
 }
 
+static char *html_escape(const char *src) {
+    size_t i, len = strlen(src), alloc = len;
+    char *out;
+    for (i = 0; i < len; i++) {
+        switch (src[i]) {
+            case '<': case '>': alloc += 3; break;
+            case '&': alloc += 4; break;
+            case '"': case '\'': alloc += 5; break;
+        }
+    }
+    out = xmalloc(alloc + 1);
+    size_t pos = 0;
+    for (i = 0; i < len; i++) {
+        switch (src[i]) {
+            case '<':  memcpy(out+pos, "&lt;", 4); pos += 4; break;
+            case '>':  memcpy(out+pos, "&gt;", 4); pos += 4; break;
+            case '&':  memcpy(out+pos, "&amp;", 5); pos += 5; break;
+            case '"':  memcpy(out+pos, "&quot;", 6); pos += 6; break;
+            case '\'': memcpy(out+pos, "&apos;", 6); pos += 6; break;
+            default:   out[pos++] = src[i]; break;
+        }
+    }
+    out[pos] = '\0';
+    return out;
+}
+
+static void strip_crlf(char *s) {
+    size_t r = 0, w = 0;
+    while (s[r] != '\0') {
+        if (s[r] != '\r' && s[r] != '\n')
+            s[w++] = s[r];
+        r++;
+    }
+    s[w] = '\0';
+}
+
 static void redirect(struct connection *conn, const char *format, ...)
     __printflike(2, 3);
 static void redirect(struct connection *conn, const char *format, ...) {
-    char *where, date[DATE_LEN];
+    char *where, *where_escaped, date[DATE_LEN];
     va_list va;
 
     va_start(va, format);
     xvasprintf(&where, format, va);
     va_end(va);
+
+    strip_crlf(where);
+    where_escaped = html_escape(where);
 
     /* Only really need to calculate the date once. */
     rfc1123_date(date, now);
@@ -1741,11 +1780,11 @@ static void redirect(struct connection *conn, const char *format, ...) {
     conn->reply_length = xasprintf(&(conn->reply),
      "<!DOCTYPE html><html><head><title>301 Moved Permanently</title></head><body>\n"
      "<h1>Moved Permanently</h1>\n"
-     "Moved to: <a href=\"%s\">%s</a>\n" /* where x 2 */
+     "Moved to: <a href=\"%s\">%s</a>\n" /* where_escaped x 2 */
      "<hr>\n"
      "%s" /* generated on */
      "</body></html>\n",
-     where, where, generated_on(date));
+     where_escaped, where_escaped, generated_on(date));
 
     conn->header_length = xasprintf(&(conn->header),
      "HTTP/1.1 301 Moved Permanently\r\n"
@@ -1761,6 +1800,7 @@ static void redirect(struct connection *conn, const char *format, ...) {
      date, server_hdr, where, keep_alive(conn),
      custom_hdrs, llu(conn->reply_length));
 
+    free(where_escaped);
     free(where);
     conn->reply_type = REPLY_GENERATED;
     conn->http_code = 301;
