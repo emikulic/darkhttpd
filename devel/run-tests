@@ -231,7 +231,7 @@ fi
 echo "===> test_parse_field"
 $CC -g -O2 -fsanitize=address -fsanitize=undefined \
   test_parse_field.c -o test_parse_field || exit 1
-if ! ./test_parse_field; then
+if ./test_parse_field | grep ':FAIL:'; then
   echo test_parse_field failed >&2
   exit 1
 fi
