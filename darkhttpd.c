@@ -1099,8 +1099,10 @@ static void parse_commandline(const int argc, char *argv[]) {
     int i;
     size_t len;
 
-    if ((argc < 2) || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
-        usage(argv[0]); /* no wwwroot given */
+    /* Print usage statement if no wwwroot given, or if -h or --help. */
+    if ((argc < 2) || (argc == 2 &&
+       (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0))) {
+        usage(argv[0]);
         exit(EXIT_SUCCESS);
     }
 
