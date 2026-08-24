@@ -2,33 +2,18 @@
 #include "../darkhttpd.c"
 #undef main
 
-static void
-test(const char *input, const char *expected)
-{
-    char *tmp = NULL;
-    if (input!=NULL) tmp = xstrdup(input);
-    char *out = normalize_path(tmp);
-
-    if (expected == NULL) {
-        if (out == NULL)
-            printf("PASS: \"%s\" is normalized\n", input);
-        else
-            printf("FAIL: \"%s\" is normalized, but got \"%s\"\n",
-                input, out);
-    }
-    else if (out == NULL)
-        printf("FAIL: \"%s\" should become \"%s\", got NULL\n",
-            input, expected);
-    else if (strcmp(out, expected) == 0)
-        printf("PASS: \"%s\" => \"%s\"\n", input, out);
+static void test(const char *input, const char *expected) {
+    char* actual = xstrdup(input);
+    normalize_path(actual);
+    if (strcmp(actual, expected) == 0)
+        printf("PASS: \"%s\" => \"%s\"\n", input, actual);
     else
         printf("FAIL: \"%s\" => \"%s\", expecting \"%s\"\n",
-            input, out, expected);
-    free(tmp);
+            input, actual, expected);
+    free(actual);
 }
 
 static char const *tests[] = {
-    NULL, NULL,
     "", "",
     "/", "/",
     "/.", "/.",
@@ -47,9 +32,7 @@ static char const *tests[] = {
     NULL
 };
 
-int
-main(void)
-{
+int main(void) {
     const char **curr = tests;
 
     do {

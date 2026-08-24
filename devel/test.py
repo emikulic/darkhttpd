@@ -251,6 +251,7 @@ def setUpModule():
         ["up dir",               "/dir/../",             "assertIsIndex"],
         ["extra slashes",        "//dir///..////",       "assertIsIndex"],
         ["no trailing slash",    "/dir/..",              "assertIsIndex"],
+        ["absolute form",        "http://a.com:1234/",   "assertIsIndex"],
         ["no leading slash",     "dir/../",              "assertIsInvalid"],
         ["invalid up dir",       "/../",                 "assertIsInvalid"],
         ["fancy invalid up dir", "/./dir/./../../",      "assertIsInvalid"],
