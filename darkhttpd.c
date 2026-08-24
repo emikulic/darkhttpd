@@ -998,8 +998,8 @@ static void usage(const char *argv0) {
     printf("\t--forward-all url (default: don't forward)\n"
     "\t\tWeb forward (301 redirect).\n"
     "\t\tAll requests are redirected to the corresponding url.\n\n");
-    printf("\t--forward-https\n"
-    "\t\tIf the client requested HTTP, forward to HTTPS.\n"
+    printf("\t--forward-https (default: don't)\n"
+    "\t\tIf X-Forwarded-Proto isn't https, redirect to HTTPS.\n"
     "\t\tThis is useful if darkhttpd is behind a reverse proxy\n"
     "\t\tthat supports SSL.\n\n");
     printf("\t--no-server-id\n"
@@ -1838,18 +1838,15 @@ static void redirect_https(struct connection *conn) {
     free(url);
 }
 
-static int is_https_redirect(struct connection *conn) {
+static int needs_https_redirect(struct connection *conn) {
     char *proto = NULL;
-
     if (forward_to_https == 0)
-        return 0; /* --forward-https was never used */
-
+        return 0;
     proto = parse_field(conn, "X-Forwarded-Proto: ");
     if (proto == NULL || strcasecmp(proto, "https") == 0) {
         free(proto);
         return 0;
     }
-
     free(proto);
     return 1;
 }
@@ -2575,7 +2572,7 @@ static void process_request(struct connection *conn) {
         default_reply(conn, 400, "Bad Request",
             "You sent a request that the server couldn't understand.");
     }
-    else if (is_https_redirect(conn)) {
+    else if (needs_https_redirect(conn)) {
         redirect_https(conn);
     }
     /* fail if: (auth_enabled) AND (client supplied invalid credentials) */
