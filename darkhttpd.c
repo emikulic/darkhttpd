@@ -2016,8 +2016,8 @@ static int dlent_cmp(const void *a, const void *b) {
                   (*((const struct dlent * const *)b))->name);
 }
 
-/* Make sorted list of files in a directory.  Returns number of entries, or -1
- * if error occurs.
+/* Make sorted list of files in a directory. The path arg must end with '/'
+ * Returns number of entries, or -1 if error occurs.
  */
 static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     DIR *dir;
@@ -2026,24 +2026,31 @@ static ssize_t make_sorted_dirlist(const char *path, struct dlent ***output) {
     size_t pool = 128;
     char *currname;
     struct dlent **list = NULL;
+    size_t pathlen;
 
     dir = opendir(path);
     if (dir == NULL)
         return -1;
 
+    pathlen = strlen(path);
     currname = xmalloc(strlen(path) + MAXNAMLEN + 1);
+    memcpy(currname, path, pathlen + 1);
     list = xmalloc(sizeof(struct dlent*) * pool);
 
     /* construct list */
     while ((ent = readdir(dir)) != NULL) {
         struct stat s;
+        size_t namelen;
 
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
             continue; /* skip "." and ".." */
         if (want_hide_dotfiles && ent->d_name[0] == '.')
             continue;
-        assert(strlen(ent->d_name) <= MAXNAMLEN);
-        sprintf(currname, "%s%s", path, ent->d_name);
+        namelen = strlen(ent->d_name);
+        // We can't trust the compile-time MAXNAMLEN at runtime.
+        if (namelen > MAXNAMLEN)
+            continue; /* skip overly long filenames */
+        memcpy(currname + pathlen, ent->d_name, namelen + 1);
         if (stat(currname, &s) == -1)
             continue; /* skip un-stat-able files */
         if (entries == pool) {
