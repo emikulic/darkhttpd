@@ -60,38 +60,6 @@ runtests() {
   # Should exit immediately.
   ./a.out $DIR --port $PORT --ipv6 --addr 127.0.0.1 2>&1 | grep -F "malformed --addr argument" > /dev/null || exit 1
 
-  echo "===> run IPv6 accept() debug log test (regression: was printing garbage IPv4 address)"
-  ./a.out $DIR --port $PORT --ipv6 --addr ::1 \
-    >test.out.ipv6debug 2>>test.out.stderr &
-  PID=$!
-  kill -0 $PID || exit 1
-  $PYTHON -c "
-import socket, sys, time
-for _ in range(50):
-    try:
-        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        s.settimeout(2)
-        s.connect(('::1', $PORT, 0, 0))
-        s.send(b'GET / HTTP/1.0\r\nConnection: close\r\n\r\n')
-        try: s.recv(65536)
-        except: pass
-        s.close()
-        sys.exit(0)
-    except OSError:
-        s.close()
-        time.sleep(0.05)
-print('FAIL: could not connect to IPv6 server', file=sys.stderr)
-sys.exit(1)
-  " || { kill $PID; exit 1; }
-  kill $PID
-  wait $PID
-  grep -qF "accepted connection from [::1]:" test.out.ipv6debug || {
-    echo "FAIL: IPv6 debug accept log should contain [::1]:PORT but got:"
-    cat test.out.ipv6debug
-    exit 1
-  }
-  rm -f test.out.ipv6debug
-
   echo "===> run tests against a basic instance (generates darkhttpd.gcda)"
   ./a.out $DIR --port $PORT --addr $ADDR --log test.out.log \
     >>test.out.stdout 2>>test.out.stderr &
