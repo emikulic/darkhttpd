@@ -3110,15 +3110,15 @@ static void change_root(void) {
             path[1] = '\0';
         }
         if (chroot(path) == -1)
-            err(1, "chroot(%s)", path);
-        printf("chrooted to `%s'\n", path);
+            err(1, "chroot(\"%s\")", path);
+        printf("chrooted to \"%s\"\n", path);
         free(path);
     } else {
         if (chdir(wwwroot) == -1)
-            err(1, "chdir(%s)", wwwroot);
-        if (chroot(wwwroot) == -1)
-            err(1, "chroot(%s)", wwwroot);
-        printf("chrooted to `%s'\n", wwwroot);
+            err(1, "chdir(\"%s\")", wwwroot);
+        if (chroot(".") == -1)
+            err(1, "chroot(\".\")");
+        printf("chrooted to \"%s\"\n", wwwroot);
         wwwroot[0] = '\0'; /* empty string */
     }
 }
