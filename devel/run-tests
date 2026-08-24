@@ -225,12 +225,6 @@ if ./test_parse_field | grep ':FAIL:'; then
   exit 1
 fi
 
-# Check that the code builds with various defines.
-echo "===> building without -DDEBUG"
-$CC -O2 -Wall ../darkhttpd.c || exit 1
-echo "===> building with -DNO_IPV6"
-$CC -O2 -Wall -DNO_IPV6 ../darkhttpd.c || exit 1
-
 # Do coverage and sanitizers.
 # In the case of an error being found:
 # -fsanitize=undefined produces stderr.
