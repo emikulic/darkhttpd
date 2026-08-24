@@ -247,41 +247,23 @@ def makeSimpleCases(name, url, assert_name):
 
 def setUpModule():
     for args in [
-        ["index",                "/",               "assertIsIndex"],
-        ["up dir",               "/dir/../",        "assertIsIndex"],
-        ["extra slashes",        "//dir///..////",  "assertIsIndex"],
-        ["no trailing slash",    "/dir/..",         "assertIsIndex"],
-        ["no leading slash",     "dir/../",         "assertIsInvalid"],
-        ["invalid up dir",       "/../",            "assertIsInvalid"],
-        ["fancy invalid up dir", "/./dir/./../../", "assertIsInvalid"],
-        ["ascii nul",            "/\x00/",          "assertBadRequest"],
-        ["space in url",         "/foo bar",        "assertBadRequest"],
-        ["extra slashes 2",      "//.d",            "assertNotFound"],
-        ["not found",            "/not_found.txt",  "assertNotFound"],
-        ["not found dir",        "/not_found/",     "assertNotFound"],
-        ["forbidden",            "/forbidden/x",    "assertForbidden"],
-        ["unreadable",           "/unreadable/",    "assertForbidden"],
+        ["index",                "/",                    "assertIsIndex"],
+        ["up dir",               "/dir/../",             "assertIsIndex"],
+        ["extra slashes",        "//dir///..////",       "assertIsIndex"],
+        ["no trailing slash",    "/dir/..",              "assertIsIndex"],
+        ["no leading slash",     "dir/../",              "assertIsInvalid"],
+        ["invalid up dir",       "/../",                 "assertIsInvalid"],
+        ["fancy invalid up dir", "/./dir/./../../",      "assertIsInvalid"],
+        ["ascii nul",            "/\x00/",               "assertBadRequest"],
+        ["space in url",         "/foo bar",             "assertBadRequest"],
+        ["too many versions",    "/x HTTP/1.0 HTTP/1.1", "assertBadRequest"],
+        ["extra slashes 2",      "//.d",                 "assertNotFound"],
+        ["not found",            "/not_found.txt",       "assertNotFound"],
+        ["not found dir",        "/not_found/",          "assertNotFound"],
+        ["forbidden",            "/forbidden/x",         "assertForbidden"],
+        ["unreadable",           "/unreadable/",         "assertForbidden"],
         ]:
         makeSimpleCases(*args)
-
-class TestMalformedRequestLine(TestHelper):
-    def _raw(self, request_line):
-        c = Conn()
-        c.s.send((request_line + "\r\n\r\n").encode("utf-8"))
-        resp = b""
-        while True:
-            signal.alarm(1)
-            r = c.s.recv(65536)
-            signal.alarm(0)
-            if not r:
-                break
-            resp += r
-        c.close()
-        return resp
-
-    def test_extra_token_after_version(self):
-        resp = self._raw("GET / HTTP/1.1 HTTP/1.1\r\nConnection: close")
-        self.assertBadRequest(resp, "/")
 
 class TestDirRedirect(TestHelper):
     def setUp(self):
