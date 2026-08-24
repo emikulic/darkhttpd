@@ -15,7 +15,7 @@ format:
 	clang-format -i test_parse_field.c
 
 $(OBJS): %.o: %.c ../darkhttpd.c
-	$(CCACHE) $(CC) $(CCFLAGS) -c $<
+	$(CCACHE) $(CC) $(CCFLAGS) -DDEBUG -c $<
 
 # Linking is uncacheable.
 $(TESTS): %: %.o
@@ -26,12 +26,12 @@ darkhttpd: ../darkhttpd.c
 	$(CCACHE) $(CC) $(COVFLAGS) -c $< -o darkhttpd.o
 	$(CC) $(COVFLAGS) darkhttpd.o -o darkhttpd
 
-# Tests building without -DDEBUG
+# Test building without -DDEBUG
 darkhttpd_no_debug: ../darkhttpd.c
 	$(CCACHE) $(CC) $(CCFLAGS) -c $< -o darkhttpd_no_debug.o
 	$(CC) $(CCFLAGS) -o $@ darkhttpd_no_debug.o
 
-# Tests building with -DNO_IPV6
+# Test building with -DNO_IPV6
 darkhttpd_no_ipv6: ../darkhttpd.c
 	$(CCACHE) $(CC) $(CCFLAGS) -DNO_IPV6 -c $< -o darkhttpd_no_ipv6.o
 	$(CC) $(CCFLAGS) -o $@ darkhttpd_no_ipv6.o
