@@ -2,12 +2,13 @@
 
 CCACHE := $(shell which ccache)
 CCFLAGS ?= -g -O2 -fsanitize=address -fsanitize=undefined -Wall
+COVFLAGS ?= $(CCFLAGS) --coverage -fno-omit-frame-pointer -DDEBUG -DAPBUF_INIT=1
 
 SRCS := $(wildcard test_*.c)
 OBJS := $(SRCS:.c=.o)
 TESTS := $(SRCS:.c=)
 
-all: $(TESTS) darkhttpd_no_debug darkhttpd_no_ipv6
+all: $(TESTS) darkhttpd darkhttpd_no_debug darkhttpd_no_ipv6
 	./run-tests
 
 format:
@@ -19,6 +20,11 @@ $(OBJS): %.o: %.c ../darkhttpd.c
 # Linking is uncacheable.
 $(TESTS): %: %.o
 	$(CC) $(CCFLAGS) -o $@ $<
+
+# Debug build with coverage instrumentation.
+darkhttpd: ../darkhttpd.c
+	$(CCACHE) $(CC) $(COVFLAGS) -c $< -o darkhttpd.o
+	$(CC) $(COVFLAGS) darkhttpd.o -o darkhttpd
 
 # Tests building without -DDEBUG
 darkhttpd_no_debug: ../darkhttpd.c
@@ -38,11 +44,10 @@ clean:
 		test_logging.log \
 		test_xff.log \
 		$(OBJS) $(TESTS) \
+		darkhttpd darkhttpd.o \
 		darkhttpd_no_debug darkhttpd_no_debug.o \
 		darkhttpd_no_ipv6 darkhttpd_no_ipv6.o \
-		a.out \
 		darkhttpd.gcda darkhttpd.gcno \
-		a-darkhttpd.gcda a-darkhttpd.gcno \
 		fuzz_darkhttpd.o \
 		fuzz_make_safe_uri \
 		fuzz_socket \
