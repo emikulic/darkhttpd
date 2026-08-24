@@ -2078,21 +2078,21 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size) {
     }
 }
 
-/* Is this an unreserved character according to
- * https://tools.ietf.org/html/rfc3986#section-2.3
- */
-static int is_unreserved(const unsigned char c) {
-    if (c >= 'a' && c <= 'z') return 1;
-    if (c >= 'A' && c <= 'Z') return 1;
-    if (c >= '0' && c <= '9') return 1;
+static int needs_encoding(char c) {
+    /* Is this an unreserved character according to
+     * https://tools.ietf.org/html/rfc3986#section-2.3
+     */
+    if (c >= 'a' && c <= 'z') return 0;
+    if (c >= 'A' && c <= 'Z') return 0;
+    if (c >= '0' && c <= '9') return 0;
     switch (c) {
         case '-':
         case '.':
         case '_':
         case '~':
-            return 1;
+            return 0;
     }
-    return 0;
+    return 1;
 }
 
 /* Encode string to be an RFC3986-compliant URL part.
@@ -2103,13 +2103,13 @@ static void urlencode(const char *src, char *dest) {
     int i, j;
 
     for (i = j = 0; src[i] != '\0'; i++) {
-        if (!is_unreserved((unsigned char)src[i])) {
+        if (needs_encoding(src[i])) {
             dest[j++] = '%';
             dest[j++] = hex[(src[i] >> 4) & 0xF];
             dest[j++] = hex[ src[i]       & 0xF];
-        }
-        else
+        } else {
             dest[j++] = src[i];
+        }
     }
     dest[j] = '\0';
 }
