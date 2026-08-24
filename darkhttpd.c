@@ -397,6 +397,7 @@ static const char *default_mimetype = octet_stream;
 static void poll_recv_request(struct connection *conn);
 static void poll_send_header(struct connection *conn);
 static void poll_send_reply(struct connection *conn);
+static void urlencode(const char *src, char *dest);
 
 /* close() that dies on error.  */
 static void xclose(const int fd) {
@@ -472,6 +473,8 @@ static struct apbuf *make_apbuf(void) {
     buf->str = xmalloc(buf->pool);
     return buf;
 }
+
+static void append_escaped(struct apbuf *dst, const char *src);
 
 /* Append s (of length len) to buf. */
 static void appendl(struct apbuf *buf, const char *s, const size_t len) {
@@ -1728,24 +1731,30 @@ static void default_reply(struct connection *conn,
 static void redirect(struct connection *conn, const char *format, ...)
     __printflike(2, 3);
 static void redirect(struct connection *conn, const char *format, ...) {
-    char *where, date[DATE_LEN];
+    char* where;
+    char date[DATE_LEN];
+    struct apbuf* reply;
     va_list va;
 
     va_start(va, format);
     xvasprintf(&where, format, va);
     va_end(va);
-
-    /* Only really need to calculate the date once. */
     rfc1123_date(date, now);
 
-    conn->reply_length = xasprintf(&(conn->reply),
-     "<!DOCTYPE html><html><head><title>301 Moved Permanently</title></head><body>\n"
-     "<h1>Moved Permanently</h1>\n"
-     "Moved to: <a href=\"%s\">%s</a>\n" /* where x 2 */
-     "<hr>\n"
-     "%s" /* generated on */
-     "</body></html>\n",
-     where, where, generated_on(date));
+    reply = make_apbuf();
+    append(reply, "<!DOCTYPE html><html><head>"
+        "<title>301 Moved Permanently</title></head><body>\n"
+        "<h1>Moved Permanently</h1>\n"
+        "Moved to: <a href=\"");
+    append(reply, where);
+    append(reply, "\">");
+    append_escaped(reply, where);
+    append(reply, "</a>\n<hr>\n");
+    append(reply, generated_on(date));
+    append(reply, "</body></html>\n");
+    conn->reply = reply->str;
+    conn->reply_length = reply->length;
+    free(reply);
 
     conn->header_length = xasprintf(&(conn->header),
      "HTTP/1.1 301 Moved Permanently\r\n"
@@ -1833,7 +1842,10 @@ static void redirect_https(struct connection *conn) {
         return;
     }
 
-    redirect(conn, "https://%s%s", host, url);
+    char* encoded_url = xmalloc(strlen(url) * 3 + 1);
+    urlencode(url, encoded_url);
+    redirect(conn, "https://%s%s", host, encoded_url);
+    free(encoded_url);
     free(host);
     free(url);
 }
@@ -2078,21 +2090,23 @@ static void cleanup_sorted_dirlist(struct dlent **list, const ssize_t size) {
     }
 }
 
-/* Is this an unreserved character according to
- * https://tools.ietf.org/html/rfc3986#section-2.3
- */
-static int is_unreserved(const unsigned char c) {
-    if (c >= 'a' && c <= 'z') return 1;
-    if (c >= 'A' && c <= 'Z') return 1;
-    if (c >= '0' && c <= '9') return 1;
+static int needs_encoding(char c) {
+    /* Is this an unreserved character according to
+     * https://tools.ietf.org/html/rfc3986#section-2.3
+     */
+    if (c >= 'a' && c <= 'z') return 0;
+    if (c >= 'A' && c <= 'Z') return 0;
+    if (c >= '0' && c <= '9') return 0;
     switch (c) {
         case '-':
         case '.':
         case '_':
         case '~':
-            return 1;
+    /* Also allow '/' */
+        case '/':
+            return 0;
     }
-    return 0;
+    return 1;
 }
 
 /* Encode string to be an RFC3986-compliant URL part.
@@ -2103,13 +2117,13 @@ static void urlencode(const char *src, char *dest) {
     int i, j;
 
     for (i = j = 0; src[i] != '\0'; i++) {
-        if (!is_unreserved((unsigned char)src[i])) {
+        if (needs_encoding(src[i])) {
             dest[j++] = '%';
             dest[j++] = hex[(src[i] >> 4) & 0xF];
             dest[j++] = hex[ src[i]       & 0xF];
-        }
-        else
+        } else {
             dest[j++] = src[i];
+        }
     }
     dest[j] = '\0';
 }
@@ -2326,7 +2340,10 @@ static void process_get(struct connection *conn) {
         forward_to = forward_all_url;
     }
     if (forward_to) {
-        redirect(conn, "%s%s", forward_to, decoded_url);
+        char* encoded_url = xmalloc(strlen(decoded_url) * 3 + 1);
+        urlencode(decoded_url, encoded_url);
+        redirect(conn, "%s%s", forward_to, encoded_url);
+        free(encoded_url);
         free(decoded_url);
         return;
     }
