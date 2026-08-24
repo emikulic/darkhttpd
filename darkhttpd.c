@@ -1766,37 +1766,28 @@ static void redirect(struct connection *conn, const char *format, ...) {
     conn->http_code = 301;
 }
 
-/* Parses a single HTTP request field.  Returns string from end of [field] to
- * first \r, \n or end of request string.  Returns NULL if [field] can't be
- * matched.  Case insensitive.  The field must start at the beginning of a
- * line to avoid header stuffing (using an attacker-controlled header to
- * inject a bad value for a different header).
+/* Returns the value of an HTTP request header. Value ends before the first
+ * \r, \n or end of request string. Returns NULL if field can't be matched.
+ * Case insensitive. The caller must make the field start with \n to avoid
+ * header stuffing (using an attacker-controlled header to inject a bad value
+ * for a different header). First match wins. The caller must deallocate the
+ * result.
  *
- * You need to remember to deallocate the result.
- * Example: parse_field(conn, "Referer: ");
+ * Example: char* ref = parse_field(conn, "\nReferer: ");
  */
 static char *parse_field(const struct connection *conn, const char *field) {
     size_t bound1, bound2;
-    char *pos = NULL;
-    char *ofs = conn->request;
-    int field_len = strlen(field);
+    char *pos;
 
-    while (ofs + field_len < conn->request + conn->request_length) {
-        /* find field */
-        pos = strcasestr(ofs, field);
-        if (pos == NULL)
-            return NULL;
+    /* The field being matched must start with a newline. */
+    assert(field[0] == '\n');
 
-        /* must be at start of request or start of line */
-        if (pos == ofs || pos[-1] == '\n')
-            break;
-
-        ofs = pos + field_len;
-    }
+    /* find start */
+    pos = strcasestr(conn->request, field);
     if (pos == NULL)
         return NULL;
     assert(pos >= conn->request);
-    bound1 = (size_t)(pos - conn->request) + field_len;
+    bound1 = (size_t)(pos - conn->request) + strlen(field);
 
     /* find end */
     for (bound2 = bound1;
@@ -1825,7 +1816,7 @@ static void redirect_https(struct connection *conn) {
         return;
     }
 
-    host = parse_field(conn, "Host: ");
+    host = parse_field(conn, "\nHost: ");
     if (host == NULL) {
         default_reply(conn, 400, "Bad Request",
                 "Missing 'Host' header.");
@@ -1842,7 +1833,7 @@ static int needs_https_redirect(struct connection *conn) {
     char *proto = NULL;
     if (forward_to_https == 0)
         return 0;
-    proto = parse_field(conn, "X-Forwarded-Proto: ");
+    proto = parse_field(conn, "\nX-Forwarded-Proto: ");
     if (proto == NULL || strcasecmp(proto, "https") == 0) {
         free(proto);
         return 0;
@@ -1858,7 +1849,7 @@ static int needs_https_redirect(struct connection *conn) {
 static void parse_range_field(struct connection *conn) {
     char *range;
 
-    range = parse_field(conn, "Range: bytes=");
+    range = parse_field(conn, "\nRange: bytes=");
     if (range == NULL)
         return;
 
@@ -1970,7 +1961,7 @@ static int parse_request(struct connection *conn) {
     }
 
     /* parse connection field */
-    tmp = parse_field(conn, "Connection: ");
+    tmp = parse_field(conn, "\nConnection: ");
     if (tmp != NULL) {
         if (strcasecmp(tmp, "close") == 0)
             conn->conn_close = 1;
@@ -1984,11 +1975,11 @@ static int parse_request(struct connection *conn) {
         conn->conn_close = 1;
 
     /* parse important fields */
-    conn->referer = parse_field(conn, "Referer: ");
-    conn->user_agent = parse_field(conn, "User-Agent: ");
-    conn->authorization = parse_field(conn, "Authorization: ");
+    conn->referer = parse_field(conn, "\nReferer: ");
+    conn->user_agent = parse_field(conn, "\nUser-Agent: ");
+    conn->authorization = parse_field(conn, "\nAuthorization: ");
     if (trusted_ip != NULL)
-        conn->forwarded_for = parse_field(conn, "X-Forwarded-For: ");
+        conn->forwarded_for = parse_field(conn, "\nX-Forwarded-For: ");
     parse_range_field(conn);
     return 1;
 }
@@ -2310,7 +2301,7 @@ static void process_get(struct connection *conn) {
 
     /* test the host against web forward options */
     if (forward_map) {
-        char *host = parse_field(conn, "Host: ");
+        char *host = parse_field(conn, "\nHost: ");
         if (host) {
             size_t i;
             if (debug)
@@ -2424,7 +2415,7 @@ static void process_get(struct connection *conn) {
     rfc1123_date(lastmod, filestat.st_mtime);
 
     /* check for If-Modified-Since, may not have to send */
-    if_mod_since = parse_field(conn, "If-Modified-Since: ");
+    if_mod_since = parse_field(conn, "\nIf-Modified-Since: ");
     if ((if_mod_since != NULL) &&
             (strcmp(if_mod_since, lastmod) == 0)) {
         if (debug)
