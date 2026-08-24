@@ -202,32 +202,24 @@ runtests() {
 
 # Unit tests.
 echo "===> test_make_safe_uri"
-$CC -g -O2 -fsanitize=address -fsanitize=undefined \
-  test_make_safe_uri.c -o test_make_safe_uri || exit 1
 if ./test_make_safe_uri | grep -E '^FAIL:'; then
   echo test_make_safe_uri failed >&2
   exit 1
 fi
 
 echo "===> test_password_equal"
-$CC -g -O2 -fsanitize=address -fsanitize=undefined \
-  test_password_equal.c -o test_password_equal || exit 1
 if ./test_password_equal | grep -E '^FAIL:'; then
   echo test_password_equal failed >&2
   exit 1
 fi
 
 echo "===> test_normalize_path"
-$CC -g -O2 -fsanitize=address -fsanitize=undefined \
-  test_normalize_path.c -o test_normalize_path || exit 1
 if ./test_normalize_path | grep -E '^FAIL:'; then
   echo test_normalize_path failed >&2
   exit 1
 fi
 
 echo "===> test_parse_field"
-$CC -g -O2 -fsanitize=address -fsanitize=undefined \
-  test_parse_field.c -o test_parse_field || exit 1
 if ./test_parse_field | grep ':FAIL:'; then
   echo test_parse_field failed >&2
   exit 1
