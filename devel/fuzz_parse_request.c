@@ -5,7 +5,7 @@
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   /* Enable some server options to exercise more code paths. */
-  trusted_ip = "0.0.0.0";
+  want_log_forwarded_for = 1;
   logfile = stdout;
 
   struct connection *conn = new_connection();
